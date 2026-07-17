@@ -1,0 +1,16 @@
+pkgbase = csakura
+	pkgdesc = A sakura tree with falling petals for your terminal (cmatrix-style)
+	pkgver = 2.0.0
+	pkgrel = 1
+	url = https://github.com/realstrawhat/csakura
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = git
+	makedepends = gcc
+	makedepends = make
+	depends = ncurses
+	source = git+https://github.com/realstrawhat/csakura.git#branch=main
+	sha256sums = SKIP
+
+pkgname = csakura

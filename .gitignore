@@ -1,0 +1,6 @@
+csakura
+*.o
+*.pkg.tar.zst
+src/csakura
+pkg/
+src/csakura-git/
