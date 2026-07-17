@@ -22,7 +22,6 @@
   .hint:hover { opacity: 0.9; }
   .hint a { color: #f2a6c8; text-decoration: none; }
 
-  /* barely-there color menu */
   .menu {
     position: fixed;
     top: 12px;
@@ -106,18 +105,12 @@
 <script>
 "use strict";
 
-/* csakura web — same generator as the terminal version, drawn on a
- * character grid to keep the TUI aesthetic. A metaball canopy of
- * blossom clouds with depth shading, a thick tapering trunk, and
- * petals drifting on the wind. Regenerates on resize. */
-
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
-const FONT_SIZE = 15;        // px; grid cell derived from this
-const FPS = 24;              // capped for low CPU
+const FONT_SIZE = 15;
+const FPS = 24;
 
-/* blossom palettes — lightest (lump highlights) to deepest (undersides) */
 const PALETTES = {
   sakura:   ["#ffe3f1", "#ffd0e7", "#ffb3d9", "#ff8fc6", "#f76fae", "#e05593", "#c13d78", "#97295c"],
   rose:     ["#ffd6e0", "#ffb8c9", "#ff8fab", "#f76a8a", "#e04a6a", "#c23452", "#9e2a42", "#7a1f34"],
@@ -136,7 +129,6 @@ const PALETTES = {
   ink:      ["#e8e4f0", "#d0cce0", "#b0a8c0", "#8880a0", "#686080", "#484860", "#303048", "#202030"],
 };
 
-/* in small/windowed mode, softens the near-white top of the ramp toward the base hue */
 const MINI_TINT = {
   sakura:   ["#ffc8e0", "#ffb8d4"],
   rose:     ["#ffb8c8", "#ffa0b4"],
@@ -164,7 +156,7 @@ const GRASS = "#87a985";
 let FADED = "#b08aa6";
 
 function isMini() {
-  /* "minimized" = anything noticeably smaller than a typical full monitor */
+
   return window.innerWidth < 1100 || window.innerHeight < 700;
 }
 
@@ -181,9 +173,9 @@ const G_FULL = "\u2588", G_DARK = "\u2593", G_MED = "\u2592", G_DOT = "\u00B7";
 const BLOOMS = ["\u2740", "\u273F", "\u2741", "\u273D"];
 const PETAL_GLYPHS = ["\u2740", "\u273F", "*", "\u00B7", "\u2218"];
 
-let cellW, cellH, gw, gh;    // cell size in px, grid size in cells
-let grid = [];               // {g, color, bold} or null
-let sources = [];            // canopy cells petals spawn from
+let cellW, cellH, gw, gh;
+let grid = [];
+let sources = [];
 let blobs = [];
 let petals = [];
 let wind = 0, windTarget = 0;
@@ -191,8 +183,6 @@ let wind = 0, windTarget = 0;
 const rand  = (a, b) => a + Math.random() * (b - a);
 const pick  = arr => arr[(Math.random() * arr.length) | 0];
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
-
-/* ---- canopy field ---------------------------------------------------- */
 
 function put(x, y, g, color, bold) {
   x |= 0; y |= 0;
@@ -210,7 +200,7 @@ function field(x, y) {
 }
 
 function genCanopy() {
-  /* bounds and vertical extent of the actual blossom clouds */
+
   let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
   for (const b of blobs) {
     bx0 = Math.min(bx0, b.x - b.rx); bx1 = Math.max(bx1, b.x + b.rx);
@@ -227,18 +217,15 @@ function genCanopy() {
 
       const f = field(x, y);
       if (f < 0.30) continue;
-      if (f < 0.42 && Math.random() < 0.35) continue; // airy outline
+      if (f < 0.42 && Math.random() < 0.35) continue;
 
-      /* vertical position inside the crown drives the base tone */
       const h = clamp((y - (cy - ry)) / (2 * ry), 0, 1);
 
-      /* slightly open underside so the branches peek through */
       if (h > 0.62 && f < 0.85 && Math.random() < (h - 0.62) * 1.3)
         continue;
 
       let shade = h * 6 + rand(-0.9, 0.9);
 
-      /* per-lump shading: bright tops, shadowed undersides */
       const fu = field(x, y - 1.6);
       if (fu > f * 1.12) shade += 1.7;
       else if (fu < f * 0.88) shade -= 1.5;
@@ -254,7 +241,6 @@ function genCanopy() {
         bold = Math.random() < 0.3;
       }
 
-      /* blossom sparkle on the surface */
       if (f > 0.55 && Math.random() < 0.07) {
         g = pick(BLOOMS);
         bold = true;
@@ -268,8 +254,6 @@ function genCanopy() {
     }
   }
 }
-
-/* ---- trunk & limbs ---------------------------------------------------- */
 
 function genTrunk(bx, tx, ty) {
   const baseY = gh - 2;
@@ -291,9 +275,6 @@ function genTrunk(bx, tx, ty) {
   }
 }
 
-/* recursive branch skeleton; tips are collected so blossom clouds can
- * grow exactly where the branches end. Branches are kept inside the
- * crown box so nothing climbs off-screen or into the margins. */
 let tips = [];
 let brXmin = 0, brXmax = 0, brYmin = 0;
 
@@ -306,17 +287,16 @@ function genBranch(x, y, angle, len, depth) {
     t += 1;
     angle = clamp(angle + rand(-0.10, 0.10), 0.15, Math.PI - 0.15);
 
-    /* bounce off the crown box instead of leaving it */
     if (x < brXmin) { x = brXmin; angle = Math.PI - angle; }
     if (x > brXmax) { x = brXmax; angle = Math.PI - angle; }
-    if (y < brYmin) { // go flat near the crown top
+    if (y < brYmin) {
       y = brYmin;
       angle = angle > Math.PI / 2 ? Math.PI - 0.20 : 0.20;
     }
 
     put(x, y, G_FULL, depth === 0 ? TRUNK_M : TRUNK_L);
     if (depth === 0)
-      put(x + 1, y, G_FULL, TRUNK_D); // main limbs are two cells thick
+      put(x + 1, y, G_FULL, TRUNK_D);
     else if (Math.random() < 0.35)
       put(x + (Math.random() < 0.5 ? -1 : 1), y, G_FULL, TRUNK_M);
   }
@@ -336,13 +316,11 @@ function genBranch(x, y, angle, len, depth) {
   }
 }
 
-/* ---- ground ------------------------------------------------------------ */
-
 function genGround(cx, rx) {
   const y = gh - 1;
   for (let x = 0; x < gw; x++) {
     const dx = (x - cx) / (rx * 1.25);
-    const p = Math.exp(-dx * dx * 2.2); // petal carpet under the crown
+    const p = Math.exp(-dx * dx * 2.2);
     const r = Math.random();
 
     if (r < p * 0.50) {
@@ -358,34 +336,28 @@ function genGround(cx, rx) {
   }
 }
 
-/* ---- tree ---------------------------------------------------------------- */
-
 function genTree() {
   grid = new Array(gw * gh).fill(null);
   sources = [];
   blobs = [];
   tips = [];
 
-  /* crown geometry: centred, with clear margins on every side */
   const rx = clamp(gw * 0.26, 6, 36);
   const ry = clamp(gh * 0.26, 3, rx * 0.55);
   const cx = gw * 0.5 + rand(-1.5, 1.5);
-  const cy = ry + 2.5; // crown top sits just below the screen edge
+  const cy = ry + 2.5;
 
-  /* trunk forks below the crown so the branch fan stays visible */
   const bx = cx + rand(-2, 2);
   const tx = cx + rand(-2, 2);
   const ty = Math.min(cy + ry * 1.15, gh - 4);
 
-  /* branches must stay inside this box (tip clouds add ~ry*0.4 on top) */
   brXmin = cx - rx * 0.80;
   brXmax = cx + rx * 0.80;
   brYmin = Math.max(1, cy - ry * 0.55);
 
-  genGround(cx, rx);       // first, so the tree overdraws it
+  genGround(cx, rx);
   genTrunk(bx, tx, ty);
 
-  /* branch skeleton fans out of the trunk top; remember the tips */
   const limbs = 3 + ((Math.random() * 2) | 0);
   const reach = (ty - brYmin) * 0.60 + 2;
   for (let i = 0; i < limbs; i++) {
@@ -395,7 +367,6 @@ function genTree() {
     genBranch(tx + rand(-1, 1), ty + rand(0, 1.5), na, reach * rand(0.75, 1.0), 0);
   }
 
-  /* blossom clouds grow on the branch tips, plus a soft core */
   const MAX_BLOBS = 28;
   blobs.push({ x: cx, y: cy - ry * 0.10, rx: rx * 0.50, ry: ry * 0.50 });
   for (const [px, py] of tips) {
@@ -408,7 +379,6 @@ function genTree() {
     });
   }
 
-  /* clusters hanging into the lower crown, branches peek between */
   for (let i = 0; i < 5 && blobs.length < MAX_BLOBS; i++) {
     blobs.push({
       x: cx + rand(-0.70, 0.70) * rx,
@@ -418,10 +388,8 @@ function genTree() {
     });
   }
 
-  genCanopy(); // canopy overdraws branch tops
+  genCanopy();
 }
-
-/* ---- petals ------------------------------------------------------------- */
 
 function spawnPetal(scatter) {
   let x, y;
@@ -443,7 +411,7 @@ function spawnPetal(scatter) {
     phase: Math.random() * Math.PI * 2,
     g: pick(PETAL_GLYPHS),
     color: RAMP[1 + ((Math.random() * 5) | 0)],
-    rest: -1,          // seconds left resting on ground; <0 = falling
+    rest: -1,
   };
 }
 
@@ -455,7 +423,7 @@ function resetPetals(scatter) {
 }
 
 function updatePetals(dt) {
-  /* wind wanders slowly, biased to the right, with occasional gusts */
+
   if (Math.random() < 0.008) windTarget = rand(-0.12, 0.45);
   wind += (windTarget - wind) * 0.02;
 
@@ -485,8 +453,6 @@ function updatePetals(dt) {
     }
   }
 }
-
-/* ---- render --------------------------------------------------------------- */
 
 function draw() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -520,8 +486,6 @@ function draw() {
   }
 }
 
-/* ---- lifecycle --------------------------------------------------------------- */
-
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = window.innerWidth * dpr;
@@ -532,11 +496,11 @@ function resize() {
 
   ctx.font = `${FONT_SIZE}px ui-monospace, monospace`;
   cellW = ctx.measureText("\u2588").width;
-  cellH = FONT_SIZE * 1.06; // near-square blocks so █ rows fuse solid
+  cellH = FONT_SIZE * 1.06;
   gw = Math.max((window.innerWidth / cellW) | 0, 20);
   gh = Math.max((window.innerHeight / cellH) | 0, 12);
 
-  applyRamp(); // full keeps whites; mini softens them toward pink
+  applyRamp();
   genTree();
   resetPetals(true);
 }
@@ -554,8 +518,6 @@ window.addEventListener("keydown", e => {
   }
   if (e.key === "Escape") menu.classList.remove("open");
 });
-
-/* ---- color menu ---------------------------------------------------------- */
 
 const menu = document.getElementById("menu");
 const menuBtn = document.getElementById("menuBtn");

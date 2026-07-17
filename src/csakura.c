@@ -1,14 +1,3 @@
-/*
- * csakura - a sakura tree with falling petals for your terminal
- *
- * Grows a lush, illustration-style cherry-blossom tree: a metaball
- * canopy of blossom clouds with depth shading, a thick tapering trunk,
- * and petals drifting off on the wind. Regenerates on resize.
- *
- * Deps: ncurses (wide-char). Build: make. License: MIT.
- * Works on Linux and macOS.
- */
-
 #if defined(__APPLE__)
 #define _DARWIN_C_SOURCE
 #else
@@ -37,30 +26,28 @@
 #define MAX_BLOBS   28
 
 typedef struct {
-    const char *glyph; /* UTF-8 glyph, NULL = empty cell */
+    const char *glyph;
     short pair;
     bool bold;
 } Cell;
 
 typedef struct {
     double x, y;
-    double vy;                /* fall speed, cells per frame  */
-    double phase, freq, amp;  /* horizontal sway              */
+    double vy;
+    double phase, freq, amp;
     const char *glyph;
     short pair;
-    double rest;              /* seconds left on the ground, <0 = falling */
+    double rest;
     bool active;
 } Petal;
 
 typedef struct { short x, y; } Coord;
 typedef struct { double x, y, rx, ry; } Blob;
 
-/* ---- state ------------------------------------------------------------- */
-
 static Cell *grid = NULL;
 static int gw = 0, gh = 0;
 
-static Coord sources[MAX_SOURCES]; /* canopy cells petals can spawn from */
+static Coord sources[MAX_SOURCES];
 static int nsources = 0;
 
 static Blob blobs[MAX_BLOBS];
@@ -73,15 +60,11 @@ static double wind = 0.0, wind_target = 0.0;
 
 static volatile sig_atomic_t running = 1;
 
-/* ---- options ------------------------------------------------------------ */
-
-static int    opt_fps     = 20;    /* -f  frames per second (5-60)   */
-static int    opt_density = 5;     /* -p  petal density     (1-10)   */
-static double opt_wind    = 1.0;   /* -w  wind strength     (0-10)   */
-static bool   opt_ascii   = false; /* -a  ASCII glyphs only          */
-static int    opt_palette = 0;     /* -c  blossom palette index      */
-
-/* ---- helpers ------------------------------------------------------------ */
+static int    opt_fps     = 20;
+static int    opt_density = 5;
+static double opt_wind    = 1.0;
+static bool   opt_ascii   = false;
+static int    opt_palette = 0;
 
 static double frand(void) { return rand() / ((double)RAND_MAX + 1.0); }
 static double frange(double a, double b) { return a + frand() * (b - a); }
@@ -92,22 +75,19 @@ static double clampd(double v, double a, double b)
 
 static void on_signal(int sig) { (void)sig; running = 0; }
 
-/* ---- colors ------------------------------------------------------------- */
-
 enum {
-    C_P0 = 1,                       /* blossom ramp: lightest ...       */
+    C_P0 = 1,
     C_P1, C_P2, C_P3, C_P4, C_P5, C_P6,
-    C_P7,                           /* ... deepest                      */
+    C_P7,
     C_TRUNK_D, C_TRUNK_M, C_TRUNK_L,
     C_GRASS, C_FADED,
 };
 
 typedef struct {
     const char *name;
-    short ramp[8];                  /* xterm-256 indices, light → deep  */
+    short ramp[8];
 } Palette;
 
-/* same set as the web version; indices approximate the hex ramps */
 static const Palette PALETTES[] = {
     { "sakura",   { 225, 224, 218, 212, 211, 175, 168, 132 } },
     { "rose",     { 224, 218, 211, 204, 203, 161, 125,  88 } },
@@ -151,12 +131,12 @@ static void apply_palette(void)
         init_pair(C_GRASS, 108, -1);
         init_pair(C_FADED, p->ramp[5], -1);
     } else {
-        /* rough 8-color fallback — still cycleable, just less precise */
+
         short base = COLOR_MAGENTA;
-        if (opt_palette == 7)  base = COLOR_YELLOW; /* gold */
-        if (opt_palette == 10) base = COLOR_CYAN;   /* sky */
+        if (opt_palette == 7)  base = COLOR_YELLOW;
+        if (opt_palette == 10) base = COLOR_CYAN;
         if (opt_palette == 11 || opt_palette == 12) base = COLOR_GREEN;
-        if (opt_palette == 14) base = COLOR_WHITE;  /* ink */
+        if (opt_palette == 14) base = COLOR_WHITE;
 
         init_pair(C_P0, COLOR_WHITE, -1);
         init_pair(C_P1, COLOR_WHITE, -1);
@@ -175,16 +155,14 @@ static void apply_palette(void)
 static void init_colors(void)
 {
     start_color();
-    use_default_colors(); /* keep the terminal's own background */
+    use_default_colors();
     apply_palette();
 }
 
-/* ---- glyph sets ----------------------------------------------------------- */
-
-static const char *G_FULL   = "\u2588"; /* █ */
-static const char *G_DARK   = "\u2593"; /* ▓ */
-static const char *G_MED    = "\u2592"; /* ▒ */
-static const char *G_DOT    = "\u00B7"; /* · */
+static const char *G_FULL   = "\u2588";
+static const char *G_DARK   = "\u2593";
+static const char *G_MED    = "\u2592";
+static const char *G_DOT    = "\u00B7";
 
 static const char *bloom_uni[] = { "\u2740", "\u273F", "\u2741", "\u273D" };
 static const char *bloom_asc[] = { "&", "%", "@", "*" };
@@ -196,8 +174,6 @@ static const char *g_full(void) { return opt_ascii ? "@" : G_FULL; }
 static const char *g_dark(void) { return opt_ascii ? "%" : G_DARK; }
 static const char *g_med(void)  { return opt_ascii ? ":" : G_MED;  }
 
-/* ---- grid ----------------------------------------------------------------- */
-
 static void put(int x, int y, const char *glyph, short pair, bool bold)
 {
     if (x < 0 || y < 0 || x >= gw || y >= gh)
@@ -207,8 +183,6 @@ static void put(int x, int y, const char *glyph, short pair, bool bold)
     c->pair  = pair;
     c->bold  = bold;
 }
-
-/* ---- canopy field --------------------------------------------------------- */
 
 static double field(double x, double y)
 {
@@ -234,7 +208,6 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
 {
     const char **blooms = opt_ascii ? bloom_asc : bloom_uni;
 
-    /* bounds of the actual blossom clouds, not the nominal crown */
     double bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
     for (int i = 0; i < nblobs; i++) {
         if (blobs[i].x - blobs[i].rx < bx0) bx0 = blobs[i].x - blobs[i].rx;
@@ -245,7 +218,6 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
     int x0 = (int)(bx0 - 3), x1 = (int)(bx1 + 3);
     int y0 = (int)(by0 - 2), y1 = (int)(by1 + 3);
 
-    /* shade against the real vertical extent of the clouds */
     cy = (by0 + by1) / 2.0;
     ry = fmax((by1 - by0) / 2.0, 2.0);
     (void)cx; (void)rx;
@@ -259,14 +231,11 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
             if (f < 0.30)
                 continue;
 
-            /* scalloped, airy outline */
             if (f < 0.42 && frand() < 0.35)
                 continue;
 
-            /* vertical position inside the crown drives the base tone */
             double h = clampd((y - (cy - ry)) / (2.0 * ry), 0.0, 1.0);
 
-            /* slightly open underside so the branches peek through */
             if (h > 0.62 && f < 0.85) {
                 double openness = (h - 0.62) * 1.3;
                 if (frand() < openness)
@@ -275,7 +244,6 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
 
             double shade = h * 6.0 + frange(-0.9, 0.9);
 
-            /* per-lump shading: bright tops, shadowed undersides */
             double fu = field(x, y - 1.6);
             if (fu > f * 1.12) shade += 1.7;
             else if (fu < f * 0.88) shade -= 1.5;
@@ -294,7 +262,6 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
                 bold = frand() < 0.3;
             }
 
-            /* blossom sparkle on the surface */
             if (f > 0.55 && frand() < 0.07) {
                 g = blooms[rand() % 4];
                 bold = true;
@@ -304,14 +271,11 @@ static void gen_canopy(double cx, double cy, double rx, double ry)
             int idx = (int)clampd(shade, 0.0, 7.0);
             put(x, y, g, (short)(C_P0 + idx), bold);
 
-            /* petals detach from edges and lump undersides */
             if ((f < 0.60 || fu > f * 1.12) && frand() < 0.5)
                 add_source(x, y);
         }
     }
 }
-
-/* ---- trunk & limbs --------------------------------------------------------- */
 
 static void gen_trunk(double bx, double tx, double ty)
 {
@@ -328,7 +292,6 @@ static void gen_trunk(double bx, double tx, double ty)
         double y = base_y - t * h;
         double x = bx + (tx - bx) * t + sin(t * M_PI) * bend;
 
-        /* taper upward, flare at the roots */
         double w = maxw * pow(1.0 - t, 1.10) * (1.0 + 1.1 * exp(-t * 10.0)) + 0.6;
 
         for (int dx = (int)-w; dx <= (int)w; dx++) {
@@ -341,9 +304,6 @@ static void gen_trunk(double bx, double tx, double ty)
     }
 }
 
-/* recursive branch skeleton; tips are collected so blossom clouds can
- * grow exactly where the branches end. Branches are kept inside the
- * crown box so nothing climbs off-screen or into the margins. */
 static Coord tips[64];
 static int ntips = 0;
 static double br_xmin, br_xmax, br_ymin;
@@ -360,16 +320,15 @@ static void gen_branch(double x, double y, double angle, double len, int depth)
         angle += frange(-0.10, 0.10);
         angle = clampd(angle, 0.15, M_PI - 0.15);
 
-        /* bounce off the crown box instead of leaving it */
         if (x < br_xmin) { x = br_xmin; angle = M_PI - angle; }
         if (x > br_xmax) { x = br_xmax; angle = M_PI - angle; }
-        if (y < br_ymin) { /* go flat near the crown top */
+        if (y < br_ymin) {
             y = br_ymin;
             angle = angle > M_PI / 2.0 ? M_PI - 0.20 : 0.20;
         }
 
         put((int)x, (int)y, g_full(), depth == 0 ? C_TRUNK_M : C_TRUNK_L, false);
-        if (depth == 0) { /* main limbs are two cells thick */
+        if (depth == 0) {
             put((int)x + 1, (int)y, g_full(), C_TRUNK_D, false);
         } else if (frand() < 0.35) {
             put((int)x + (frand() < 0.5 ? -1 : 1), (int)y, g_full(), C_TRUNK_M, false);
@@ -395,8 +354,6 @@ static void gen_branch(double x, double y, double angle, double len, int depth)
     }
 }
 
-/* ---- ground ----------------------------------------------------------------- */
-
 static void gen_ground(double cx, double rx)
 {
     const char **blooms = opt_ascii ? bloom_asc : bloom_uni;
@@ -404,7 +361,7 @@ static void gen_ground(double cx, double rx)
 
     for (int x = 0; x < gw; x++) {
         double dx = (x - cx) / (rx * 1.25);
-        double p = exp(-dx * dx * 2.2); /* petal carpet under the crown */
+        double p = exp(-dx * dx * 2.2);
         double r = frand();
 
         if (r < p * 0.50) {
@@ -421,13 +378,10 @@ static void gen_ground(double cx, double rx)
             put(x, y, "_", C_GRASS, false);
         }
 
-        /* a few strays on the row above */
         if (gh > 3 && frand() < p * 0.12)
             put(x, y - 1, opt_ascii ? "." : G_DOT, C_FADED, false);
     }
 }
-
-/* ---- tree ---------------------------------------------------------------------- */
 
 static void gen_tree(void)
 {
@@ -436,27 +390,23 @@ static void gen_tree(void)
     nblobs = 0;
     ntips = 0;
 
-    /* crown geometry: centred, with clear margins on every side */
     double rx = clampd(gw * 0.26, 6.0, 36.0);
     double ry = clampd(gh * 0.26, 3.0, rx * 0.55);
     double cx = gw * 0.5 + frange(-1.5, 1.5);
-    double cy = ry + 2.5; /* crown top sits just below the screen edge */
+    double cy = ry + 2.5;
 
-    /* trunk forks below the crown so the branch fan stays visible */
     double bx = cx + frange(-2.0, 2.0);
     double tx = cx + frange(-2.0, 2.0);
     double ty = cy + ry * 1.15;
     if (ty > gh - 4.0) ty = gh - 4.0;
 
-    /* branches must stay inside this box (tip clouds add ~ry*0.4 on top) */
     br_xmin = cx - rx * 0.80;
     br_xmax = cx + rx * 0.80;
     br_ymin = fmax(1.0, cy - ry * 0.55);
 
-    gen_ground(cx, rx); /* first, so the tree overdraws it */
+    gen_ground(cx, rx);
     gen_trunk(bx, tx, ty);
 
-    /* branch skeleton fans out of the trunk top; remember the tips */
     int limbs = 3 + rand() % 2;
     double reach = (ty - br_ymin) * 0.60 + 2.0;
     for (int i = 0; i < limbs; i++) {
@@ -467,7 +417,6 @@ static void gen_tree(void)
                    na, reach * frange(0.75, 1.0), 0);
     }
 
-    /* blossom clouds grow on the branch tips, plus a soft core */
     blobs[nblobs++] = (Blob){ cx, cy - ry * 0.10, rx * 0.50, ry * 0.50 };
     for (int i = 0; i < ntips && nblobs < MAX_BLOBS - 4; i++) {
         blobs[nblobs++] = (Blob){
@@ -478,7 +427,6 @@ static void gen_tree(void)
         };
     }
 
-    /* clusters hanging into the lower crown, branches peek between */
     for (int i = 0; i < 5 && nblobs < MAX_BLOBS; i++) {
         blobs[nblobs++] = (Blob){
             cx + frange(-0.70, 0.70) * rx,
@@ -488,10 +436,8 @@ static void gen_tree(void)
         };
     }
 
-    gen_canopy(cx, cy, rx, ry); /* canopy overdraws branch tops */
+    gen_canopy(cx, cy, rx, ry);
 }
-
-/* ---- petals ---------------------------------------------------------------------- */
 
 static void spawn_petal(Petal *p, bool scatter)
 {
@@ -508,7 +454,7 @@ static void spawn_petal(Petal *p, bool scatter)
         p->x = frand() * gw;
         p->y = -frange(0.0, 3.0);
     }
-    if (scatter) /* initial fill so the screen isn't empty at startup */
+    if (scatter)
         p->y = frange(0.0, gh - 2.0);
 
     p->vy    = frange(0.10, 0.28);
@@ -534,7 +480,7 @@ static void reset_petals(bool scatter)
 
 static void update_petals(double dt)
 {
-    /* wind wanders slowly, biased to the right, with occasional gusts */
+
     if (frand() < 0.008)
         wind_target = frange(-0.12, 0.45) * opt_wind;
     wind += (wind_target - wind) * 0.02;
@@ -542,13 +488,13 @@ static void update_petals(double dt)
     for (int i = 0; i < npetals; i++) {
         Petal *p = &petals[i];
 
-        if (!p->active) { /* trickle respawns so it never pulses */
+        if (!p->active) {
             if (frand() < 0.03)
                 spawn_petal(p, false);
             continue;
         }
 
-        if (p->rest >= 0.0) { /* lying on the ground */
+        if (p->rest >= 0.0) {
             p->rest -= dt;
             if (p->rest < 0.0)
                 p->active = false;
@@ -562,7 +508,7 @@ static void update_petals(double dt)
         if (p->x < -2.0)          p->x = gw + 1.0;
         else if (p->x > gw + 2.0) p->x = -1.0;
 
-        if (p->y >= gh - 1.0) { /* touched down */
+        if (p->y >= gh - 1.0) {
             p->y    = gh - 1.0;
             p->rest = frange(2.0, 7.0);
             p->pair = C_FADED;
@@ -570,8 +516,6 @@ static void update_petals(double dt)
         }
     }
 }
-
-/* ---- drawing ---------------------------------------------------------------------- */
 
 static void draw(void)
 {
@@ -604,8 +548,6 @@ static void draw(void)
 
     refresh();
 }
-
-/* ---- main ---------------------------------------------------------------------- */
 
 static void resize_grid(void)
 {
