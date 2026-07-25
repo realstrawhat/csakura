@@ -1,16 +1,20 @@
 {
   description = "A sakura tree with falling petals for your terminal (cmatrix-style)";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    { self, nixpkgs }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-      forAllSystems = f:
-        nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (pkgs: rec {
+      packages = forAllSystems (pkgs: {
         csakura = pkgs.stdenv.mkDerivation {
           pname = "csakura";
           version = "2.0.0";
@@ -20,7 +24,7 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = [ pkgs.ncurses ];
 
-          makeFlags = [ "PREFIX=${placeholder "out"}" "CC=cc" ];
+          makeFlags = [ "PREFIX=${placeholder "out"}" ];
 
           meta = with pkgs.lib; {
             description = "A sakura tree with falling petals for your terminal (cmatrix-style)";
@@ -31,15 +35,7 @@
           };
         };
 
-        default = csakura;
-      });
-
-      apps = forAllSystems (pkgs: rec {
-        csakura = {
-          type = "app";
-          program = "${self.packages.${pkgs.system}.csakura}/bin/csakura";
-        };
-        default = csakura;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.csakura;
       });
 
       devShells = forAllSystems (pkgs: {
