@@ -22,8 +22,10 @@ endif
 
 all: csakura
 
+# LDFLAGS is passed through so distro hardening flags (relro, bind-now, …)
+# survive; makepkg and dpkg-buildflags both rely on it.
 csakura: src/csakura.c
-	$(CC) $(CFLAGS) -o $@ $< $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 install: csakura
 	mkdir -p "$(BINDIR)"

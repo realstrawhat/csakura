@@ -60,17 +60,71 @@
     border: 1px solid rgba(205, 184, 212, 0.12);
     border-radius: 8px;
     backdrop-filter: blur(8px);
-    min-width: 188px;
+    width: 216px;
   }
   .menu.open .panel { display: block; }
   .panel label {
-    display: block;
+    display: flex;
+    justify-content: space-between;
     color: #a890b0;
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: 8px;
     opacity: 0.7;
+  }
+  .panel label b { color: #f2a6c8; font-weight: 400; opacity: 0.9; }
+  .panel hr {
+    border: 0;
+    border-top: 1px solid rgba(205, 184, 212, 0.1);
+    margin: 12px 0 10px;
+  }
+  .panel input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    margin: 0 0 12px;
+    border-radius: 2px;
+    background: rgba(205, 184, 212, 0.18);
+    cursor: pointer;
+  }
+  .panel input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border: 0;
+    border-radius: 50%;
+    background: #f2a6c8;
+  }
+  .panel input[type="range"]::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: 0;
+    border-radius: 50%;
+    background: #f2a6c8;
+  }
+  .chips { display: flex; gap: 6px; }
+  .chip {
+    flex: 1;
+    padding: 6px 0;
+    font: inherit;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #a890b0;
+    background: rgba(205, 184, 212, 0.06);
+    border: 1px solid rgba(205, 184, 212, 0.12);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+  }
+  .chip:hover { background: rgba(205, 184, 212, 0.12); }
+  .chip.on {
+    color: #120e18;
+    background: #f2a6c8;
+    border-color: #f2a6c8;
   }
   .swatches {
     display: grid;
@@ -99,17 +153,33 @@
   <div class="panel">
     <label>blossom</label>
     <div class="swatches" id="swatches"></div>
+    <hr>
+    <label>petals <b id="vPetals">5</b></label>
+    <input type="range" id="rPetals" min="1" max="10" step="1">
+    <label>wind <b id="vWind">1</b></label>
+    <input type="range" id="rWind" min="0" max="10" step="1">
+    <label>speed <b id="vFps">24</b></label>
+    <input type="range" id="rFps" min="5" max="60" step="1">
+    <div class="chips">
+      <button class="chip" id="cAscii" title="ASCII glyphs only (a)">ascii</button>
+      <button class="chip" id="cFlat" title="no cell backgrounds (t)">flat</button>
+      <button class="chip" id="cRegrow" title="regrow the tree (r)">regrow</button>
+    </div>
   </div>
 </div>
-<div class="hint">[r] regrow &nbsp;·&nbsp; <a href="https://github.com/realstrawhat/csakura">csakura</a></div>
+<div class="hint">[r] regrow &nbsp;·&nbsp; [⋮] options &nbsp;·&nbsp; <a href="https://github.com/realstrawhat/csakura">csakura</a></div>
 <script>
 "use strict";
 
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
+/* The tree never changes between frames, so it is rendered once onto an
+ * offscreen canvas and blitted each frame with only the petals drawn live. */
+const treeCanvas = document.createElement("canvas");
+const treeCtx = treeCanvas.getContext("2d");
+
 const FONT_SIZE = 15;
-const FPS = 24;
 
 const PALETTES = {
   sakura:   ["#ffe3f1", "#ffd0e7", "#ffb3d9", "#ff8fc6", "#f76fae", "#e05593", "#c13d78", "#97295c"],
@@ -147,18 +217,74 @@ const MINI_TINT = {
   ink:      ["#d0cce0", "#b8b4c8"],
 };
 
-let paletteKey = localStorage.getItem("csakura-palette") || "sakura";
-if (!PALETTES[paletteKey]) paletteKey = "sakura";
+const PKEYS = Object.keys(PALETTES);
+
+/* Same knobs the terminal build exposes, persisted between visits. */
+let paletteKey = "sakura";
+let optDensity = 5, optWind = 1, optFps = 24;
+let optAscii = false, optFlat = false;
+
+function loadOpts() {
+  let o = {};
+  try { o = JSON.parse(localStorage.getItem("csakura-opts") || "{}") || {}; } catch (e) { o = {}; }
+  /* 1.x stored only the palette, under its own key */
+  paletteKey = o.palette || localStorage.getItem("csakura-palette") || "sakura";
+  if (!PALETTES[paletteKey]) paletteKey = "sakura";
+  optDensity = clamp(o.density | 0 || 5, 1, 10);
+  optWind    = clamp(o.wind === undefined ? 1 : +o.wind, 0, 10);
+  optFps     = clamp(o.fps | 0 || 24, 5, 60);
+  optAscii   = !!o.ascii;
+  optFlat    = !!o.flat;
+}
+
+function saveOpts() {
+  try {
+    localStorage.setItem("csakura-opts", JSON.stringify({
+      palette: paletteKey, density: optDensity, wind: optWind,
+      fps: optFps, ascii: optAscii, flat: optFlat,
+    }));
+  } catch (e) { /* private mode — settings just won't persist */ }
+}
 
 let RAMP = PALETTES[paletteKey].slice();
-const TRUNK_D = "#3a2115", TRUNK_M = "#5c3520", TRUNK_L = "#82542f";
+const TRUNK_D = "#4a2c19", TRUNK_M = "#7d4d27", TRUNK_L = "#a8703c";
 const GRASS = "#87a985";
+const BG_TOP = "#1a1322", BG_BOT = "#120e18";
 let FADED = "#b08aa6";
 
-function isMini() {
+/* ---------- colour ---------- */
 
+function hex2rgb(h) {
+  const n = parseInt(h.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgb2hex(r, g, b) {
+  return "#" + (((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
+}
+/* t = 0 -> a, t = 1 -> b */
+function mix(a, b, t) {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  const A = hex2rgb(a), B = hex2rgb(b);
+  return rgb2hex(
+    Math.round(A[0] + (B[0] - A[0]) * t),
+    Math.round(A[1] + (B[1] - A[1]) * t),
+    Math.round(A[2] + (B[2] - A[2]) * t));
+}
+function brighten(c) {
+  const [r, g, b] = hex2rgb(c);
+  return rgb2hex(r + (((255 - r) * 3 / 10) | 0),
+                 g + (((255 - g) * 3 / 10) | 0),
+                 b + (((255 - b) * 3 / 10) | 0));
+}
+
+function isMini() {
   return window.innerWidth < 1100 || window.innerHeight < 700;
 }
+
+/* Backdrop is a vertical gradient, so every row has its own background tone.
+ * Cells blend against their own row and stay seamless with the backdrop. */
+let rowBg = [], rowHaze = [];
 
 function applyRamp() {
   RAMP = PALETTES[paletteKey].slice();
@@ -166,143 +292,335 @@ function applyRamp() {
     RAMP[0] = MINI_TINT[paletteKey][0];
     RAMP[1] = MINI_TINT[paletteKey][1];
   }
-  FADED = RAMP[5];
+  rowBg = [];
+  rowHaze = [];
+  for (let y = 0; y < gh; y++) {
+    const bg = mix(BG_TOP, BG_BOT, gh > 1 ? (y + 0.5) / gh : 1);
+    rowBg.push(bg);
+    /* Partial canopy cells fade toward this rather than the raw backdrop:
+     * blending a tint straight to dark plum bleeds the hue out to grey. */
+    rowHaze.push(mix(bg, RAMP[6], 0.22));
+  }
+  FADED = mix(rowBg[gh - 1] || BG_BOT, RAMP[2], 0.70);
 }
 
-const G_FULL = "\u2588", G_DARK = "\u2593", G_MED = "\u2592", G_DOT = "\u00B7";
-const BLOOMS = ["\u2740", "\u273F", "\u2741", "\u273D"];
-const PETAL_GLYPHS = ["\u2740", "\u273F", "*", "\u00B7", "\u2218"];
+const G_FULL = "█", G_DARK = "▓", G_MED = "▒",
+      G_LITE = "░", G_DOT = "·";
+const BLOOMS_UNI = ["❀", "✿", "❁", "✽"];
+const BLOOMS_ASC = ["&", "%", "@", "*"];
+const PETAL_UNI  = ["❀", "✿", "*", "·", "∘"];
+const PETAL_ASC  = ["*", "*", "o", ".", "'"];
 
-let cellW, cellH, gw, gh;
+const gFull = () => optAscii ? "@" : G_FULL;
+const gDark = () => optAscii ? "%" : G_DARK;
+const gMed  = () => optAscii ? ":" : G_MED;
+const gLite = () => optAscii ? "." : G_LITE;
+const gDot  = () => optAscii ? "." : G_DOT;
+const blooms = () => optAscii ? BLOOMS_ASC : BLOOMS_UNI;
+
+/*
+ * Block glyphs are painted as solid rectangles blended toward the cell
+ * background, never as text: a font renders ▒/▓ as a dither pattern, which at
+ * this scale reads as grain instead of a shade. ASCII mode deliberately misses
+ * every case here, so its stand-ins are drawn as the literal characters.
+ */
+function blockCov(g) {
+  switch (g) {
+    case G_FULL: return 1.00;
+    case G_DARK: return 0.74;
+    case G_MED:  return 0.48;
+    case G_LITE: return 0.24;
+  }
+  return -1;
+}
+
+/* Flat mode drops the canopy shadow, so cells sit on the bare backdrop and a
+ * patterned page background stays visible through the crown. */
+const hazeAt = y => optFlat ? rowBg[y] : rowHaze[y];
+
+const K_NONE = 0, K_WOOD = 1, K_CANOPY = 2, K_GROUND = 3;
+
+let cellW = 9, cellH = 16, gw = 0, gh = 0;
 let grid = [];
 let sources = [];
 let blobs = [];
+let tips = [];
 let petals = [];
 let wind = 0, windTarget = 0;
+let brXmin = 0, brXmax = 0, brYmin = 0, brW = 1.45;
+let curKind = K_NONE;
 
 const rand  = (a, b) => a + Math.random() * (b - a);
 const pick  = arr => arr[(Math.random() * arr.length) | 0];
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
 
-function put(x, y, g, color, bold) {
+function putBg(x, y, g, color, bg) {
   x |= 0; y |= 0;
   if (x < 0 || y < 0 || x >= gw || y >= gh) return;
-  grid[y * gw + x] = { g, color, bold: !!bold };
+  grid[y * gw + x] = { g, color, bg, kind: curKind };
 }
 
+function put(x, y, g, color) {
+  putBg(x, y, g, color, rowBg[y | 0] || BG_BOT);
+}
+
+function kindAt(x, y) {
+  x |= 0; y |= 0;
+  if (x < 0 || y < 0 || x >= gw || y >= gh) return K_NONE;
+  const c = grid[y * gw + x];
+  return c ? c.kind : K_NONE;
+}
+
+/* ---------- noise ---------- */
+
+/*
+ * Falloff sits between a tight 2.2 and a soft 1.25. Too tight and the coverage
+ * ramp is crossed inside a single row, giving a hard horizontal cut across the
+ * crown; too soft and the per-tip blobs smear together into one smooth dome
+ * instead of reading as separate clumps of blossom.
+ */
 function field(x, y) {
   let s = 0;
   for (const b of blobs) {
     const dx = (x - b.x) / b.rx, dy = (y - b.y) / b.ry;
-    s += Math.exp(-(dx * dx + dy * dy) * 2.2);
+    s += Math.exp(-(dx * dx + dy * dy) * 1.70);
   }
   return s;
 }
 
-function genCanopy() {
+function hash01(i) {
+  let h = Math.imul(i, 2654435761) >>> 0;
+  h ^= h >>> 13;
+  h = Math.imul(h, 1274126177) >>> 0;
+  h ^= h >>> 16;
+  return (h & 0xffff) / 65535;
+}
 
+function hash2(x, y) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) & 0xffff) / 65535;
+}
+
+/* Smooth value noise in [0,1]; inputs are already divided by the feature size. */
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  let tx = x - xi, ty = y - yi;
+  tx = tx * tx * (3 - 2 * tx);
+  ty = ty * ty * (3 - 2 * ty);
+  const a = hash2(xi, yi),     b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+}
+
+/*
+ * Per-column wobble in [-0.5, 0.5], one control point every `period` cells.
+ * Sampling the field at y + wobble breaks the canopy's contour: the crown is
+ * only a dozen or so rows tall, so an unperturbed outline flattens into a
+ * straight cut across the top.
+ */
+function wobble(x, period) {
+  const p = x / period, c = Math.floor(p);
+  let t = p - c;
+  const a = hash01(c) - 0.5, b = hash01(c + 1) - 0.5;
+  t = t * t * (3 - 2 * t);
+  return a + (b - a) * t;
+}
+
+/* ---------- generation ---------- */
+
+function genCanopy(cx, rx, ryDesign) {
   let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
   for (const b of blobs) {
     bx0 = Math.min(bx0, b.x - b.rx); bx1 = Math.max(bx1, b.x + b.rx);
     by0 = Math.min(by0, b.y - b.ry); by1 = Math.max(by1, b.y + b.ry);
   }
+  if (by0 < 0) by0 = 0;
   const x0 = (bx0 - 3) | 0, x1 = (bx1 + 3) | 0;
-  const y0 = (by0 - 2) | 0, y1 = (by1 + 3) | 0;
-  const cy = (by0 + by1) / 2, ry = Math.max((by1 - by0) / 2, 2);
+  const y0 = Math.max((by0 - 1) | 0, 0), y1 = (by1 + 3) | 0;
+
+  const cy = (by0 + by1) / 2;
+  const ry = Math.max((by1 - by0) / 2, 2);
+
+  /* Feature sizes tied to the tree, so texture scales with the viewport. */
+  const wobAmp = Math.max(ryDesign * 0.18, 0.8);
+  const wobPer = Math.max(rx * 0.11, 2.0);
+  const clumpX = Math.max(rx * 0.22, 2.0);
+  const clumpY = Math.max(ryDesign * 0.26, 1.2);
+
+  curKind = K_CANOPY;
 
   for (let y = y0; y <= y1; y++) {
     if (y < 0 || y >= gh) continue;
+    const haze = hazeAt(y);
     for (let x = x0; x <= x1; x++) {
       if (x < 0 || x >= gw) continue;
 
-      const f = field(x, y);
-      if (f < 0.30) continue;
-      if (f < 0.42 && Math.random() < 0.35) continue;
+      const wob = wobble(x, wobPer) * wobAmp;
+      const f = field(x, y + wob);
+      if (f < 0.20) continue;
+
+      /* Coverage: 1 deep inside the mass, falling to 0 at the rim. */
+      let cov0 = clamp((f - 0.20) / 0.60, 0, 1);
+      cov0 = cov0 * cov0 * (3 - 2 * cov0);
+      let cov = cov0;
+
+      /*
+       * Break the mass into blossom clumps. Without this the crown is a single
+       * smooth blob — a generic tree. Two octaves, stretched horizontally, give
+       * the layered clusters a cherry reads as.
+       */
+      const cl = 0.62 * vnoise(x / clumpX, y / clumpY)
+               + 0.38 * vnoise(x / (clumpX * 0.45), y / (clumpY * 0.5));
+      cov = clamp(cov * (0.50 + 1.00 * cl), 0, 1);
+
+      /*
+       * Ragged silhouette, and gaps where the clumps thin out. Gaps deep inside
+       * the crown fall back to a shadow tone — dropping straight to the
+       * backdrop punches visible holes in the mass.
+       */
+      if (cov < 0.55 && Math.random() > cov * 1.5) {
+        if (cov0 > 0.60 && kindAt(x, y) !== K_WOOD)
+          putBg(x, y, gLite(), RAMP[6], haze);
+        continue;
+      }
 
       const h = clamp((y - (cy - ry)) / (2 * ry), 0, 1);
 
-      if (h > 0.62 && f < 0.85 && Math.random() < (h - 0.62) * 1.3)
+      /* Thin the underside so the canopy trails off into wisps. */
+      if (h > 0.72 && Math.random() < (h - 0.72) * 2.2 * (1.3 - cov))
         continue;
 
-      let shade = h * 6 + rand(-0.9, 0.9);
-
-      const fu = field(x, y - 1.6);
-      if (fu > f * 1.12) shade += 1.7;
-      else if (fu < f * 0.88) shade -= 1.5;
-
-      let g, bold = false;
-      if (f > 0.92)
-        g = Math.random() < 0.80 ? G_FULL : G_DARK;
-      else if (f > 0.55)
-        g = Math.random() < 0.60 ? G_DARK : G_MED;
-      else {
-        const r = Math.random();
-        g = r < 0.45 ? G_MED : r < 0.85 ? pick(BLOOMS) : G_DOT;
-        bold = Math.random() < 0.3;
+      /* Let limbs show through between clusters — dark branches threading the
+       * blossom is most of the character. Driven by the noise field, not a coin
+       * flip, so a limb emerges as a continuous run rather than a scatter of
+       * disconnected dashes. */
+      if ((cov < 0.50 || cl < 0.30) && kindAt(x, y) === K_WOOD) {
+        grid[y * gw + x].bg = haze;
+        continue;
       }
 
-      if (f > 0.55 && Math.random() < 0.07) {
-        g = pick(BLOOMS);
-        bold = true;
-        shade -= 2;
+      /*
+       * Light falls from the upper left; the mass shades what's below. Thin rim
+       * cells take a deep, saturated tone on purpose: a pale tint blended
+       * toward a dark background turns grey, not pink.
+       */
+      let shade = 1.1
+                + h * 5.2
+                + ((x - cx) / Math.max(rx, 1)) * 0.70
+                + (1 - cov) * 2.0
+                + (0.5 - cl) * 2.8      /* clumps read as clusters  */
+                + rand(-1.05, 1.05);    /* dither across ramp steps */
+
+      const fu = field(x, y + wob - 1.6);
+      if (fu > f * 1.10)      shade += 1.6;
+      else if (fu < f * 0.85) shade -= 1.4;
+
+      const idx = clamp(shade, 0, 7) | 0;
+      const base = RAMP[idx];
+
+      /* Solid well before the rim, so the mass stays saturated and only the
+       * outer fringe dissolves. */
+      let g = cov > 0.62 ? gFull()
+            : cov > 0.42 ? gDark()
+            : cov > 0.24 ? gMed()
+            : gLite();
+      let color = base, bg = haze;
+
+      /*
+       * Blossoms ride on top of the mass, densest around the rim, and step away
+       * from the local tone rather than always lightening — a pale flower on
+       * the pale crown is invisible.
+       */
+      if (Math.random() < 0.06 + 0.16 * cl + 0.14 * (1 - cov)) {
+        g = pick(blooms());
+        bg = mix(haze, base, cov * 0.85);
+        color = idx <= 2 ? RAMP[idx + 3] : RAMP[idx - 3];
+        if (idx > 2 && Math.random() < 0.35) color = brighten(color);
       }
 
-      put(x, y, g, RAMP[clamp(shade, 0, 7) | 0], bold);
+      putBg(x, y, g, color, bg);
 
-      if ((f < 0.60 || fu > f * 1.12) && Math.random() < 0.5)
+      if ((cov < 0.55 || fu > f * 1.10) && Math.random() < 0.5)
         sources.push([x, y]);
     }
   }
+
+  curKind = K_NONE;
 }
 
-function genTrunk(bx, tx, ty) {
-  const baseY = gh - 2;
-  const h = Math.max(baseY - ty, 2);
-  const maxw = clamp(gw * 0.028, 2, 5);
-  const bend = rand(-1, 1) * clamp(gw * 0.02, 1, 4);
+/*
+ * Lay down one horizontal slice of wood centred on x with half-width w, using
+ * partial block glyphs where the edge falls inside a cell so the taper reads as
+ * a smooth curve rather than a staircase.
+ */
+function woodSpan(x, y, w, dark, mid, lite) {
+  const i0 = Math.floor(x - w), i1 = Math.ceil(x + w);
+  for (let xi = i0; xi <= i1; xi++) {
+    const l = Math.max(xi, x - w);
+    const rr = Math.min(xi + 1, x + w);
+    const cov = rr - l;
+    if (cov <= 0.06) continue;
 
-  const steps = (h * 2 + 2) | 0;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const y = baseY - t * h;
-    const x = bx + (tx - bx) * t + Math.sin(t * Math.PI) * bend;
-    const w = maxw * Math.pow(1 - t, 1.10) * (1 + 1.1 * Math.exp(-t * 10)) + 0.6;
-
-    for (let dx = -w | 0; dx <= w; dx++) {
-      const c = dx < -w * 0.35 ? TRUNK_D : dx > w * 0.45 ? TRUNK_L : TRUNK_M;
-      put(x + dx, y, G_FULL, c);
-    }
+    const d = (xi + 0.5 - x) / Math.max(w, 0.5);
+    const color = d < -0.30 ? dark : (d > 0.40 ? lite : mid);
+    const g = cov > 0.85 ? gFull()
+            : cov > 0.55 ? gDark()
+            : cov > 0.28 ? gMed()
+            : gLite();
+    put(xi, y, g, color);
   }
 }
 
-let tips = [];
-let brXmin = 0, brXmax = 0, brYmin = 0;
+function genTrunk(bx, tx, ty, rx) {
+  const baseY = gh - 2;
+  const h = Math.max(baseY - ty, 2);
+
+  /* Sized off the crown, so the trunk keeps its proportion at every size. */
+  const maxw = Math.max(rx * 0.085, 1.4);
+  const bend = rand(-1, 1) * Math.max(rx * 0.06, 1.0);
+
+  for (let y = ty | 0; y <= (baseY | 0); y++) {
+    const t = clamp((baseY - y) / h, 0, 1);
+    const x = bx + (tx - bx) * t + Math.sin(t * Math.PI) * bend;
+    /* Gentle root flare — a steep one reads as a wedge, not a trunk. */
+    const w = maxw * Math.pow(1 - t, 1.10) * (1 + 0.60 * Math.exp(-t * 6)) + 0.55;
+    woodSpan(x, y, w, TRUNK_D, TRUNK_M, TRUNK_L);
+  }
+}
 
 function genBranch(x, y, angle, len, depth) {
   let t = 0;
+  const w0 = brW * (depth === 0 ? 1.0 : depth === 1 ? 0.66 : depth === 2 ? 0.42 : 0.28);
+
   while (t < len) {
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    x += dx * 1.7;
-    y -= dy * 0.85;
-    t += 1;
-    angle = clamp(angle + rand(-0.10, 0.10), 0.15, Math.PI - 0.15);
+    /* Half-cell steps: a full step skips cells and breaks the limb apart. The
+     * 0.85 / 0.42 split is the cell aspect — a limb at 45° has to look like 45°
+     * on screen, not like a shallow diagonal. */
+    x += dx * 0.85;
+    y -= dy * 0.42;
+    t += 0.5;
+    angle = clamp(angle + rand(-0.05, 0.05), 0.15, Math.PI - 0.15);
 
     if (x < brXmin) { x = brXmin; angle = Math.PI - angle; }
     if (x > brXmax) { x = brXmax; angle = Math.PI - angle; }
-    if (y < brYmin) {
-      y = brYmin;
-      angle = angle > Math.PI / 2 ? Math.PI - 0.20 : 0.20;
-    }
+    /* Stop at the ceiling. Deflecting sideways instead makes every limb run
+     * along it, leaving a row of horizontal dashes in the crown. */
+    if (y < brYmin) { y = brYmin; break; }
 
-    put(x, y, G_FULL, depth === 0 ? TRUNK_M : TRUNK_L);
-    if (depth === 0)
-      put(x + 1, y, G_FULL, TRUNK_D);
-    else if (Math.random() < 0.35)
-      put(x + (Math.random() < 0.5 ? -1 : 1), y, G_FULL, TRUNK_M);
+    /* The finest twigs are sub-cell width; drawing them only scatters
+     * disconnected specks through the blossom. They still seed tips. */
+    if (depth < 3) {
+      const w = w0 * (1 - 0.45 * (t / Math.max(len, 1)));
+      woodSpan(x, y | 0, w, TRUNK_D, depth === 0 ? TRUNK_M : TRUNK_L, TRUNK_L);
+    }
   }
 
+  /* Two levels only: deeper recursion lets the first limb's subtree consume
+   * every tip slot, so the crown only forms on one side. */
   if (depth >= 2 || len < 3) {
-    tips.push([x, y]);
+    if (tips.length < 64) tips.push([x, y]);
     return;
   }
 
@@ -318,22 +636,38 @@ function genBranch(x, y, angle, len, depth) {
 
 function genGround(cx, rx) {
   const y = gh - 1;
+  curKind = K_GROUND;
+
   for (let x = 0; x < gw; x++) {
     const dx = (x - cx) / (rx * 1.25);
     const p = Math.exp(-dx * dx * 2.2);
     const r = Math.random();
+    /* Grass fades out with distance instead of ruling a hard line. */
+    const grass = mix(rowBg[y], GRASS, 0.30 + 0.70 * p);
 
-    if (r < p * 0.50) {
+    if (r < p * 0.55) {
       const rr = Math.random();
-      const g = rr < 0.25 ? pick(BLOOMS) : rr < 0.60 ? G_DOT : ",";
-      put(x, y, g, RAMP[3 + ((Math.random() * 4) | 0)]);
-    } else if (r < p * 0.50 + 0.10) put(x, y, '"', GRASS);
-    else if (r < p * 0.50 + 0.16)   put(x, y, ",", GRASS);
-    else                            put(x, y, "_", GRASS);
+      const g = rr < 0.28 ? pick(blooms()) : rr < 0.62 ? gDot() : ",";
+      put(x, y, g, RAMP[2 + ((Math.random() * 4) | 0)]);
+    } else if (r < p * 0.55 + 0.10) put(x, y, '"', grass);
+    else if (r < p * 0.55 + 0.16)   put(x, y, ",", grass);
+    else                            put(x, y, "_", grass);
 
-    if (gh > 3 && Math.random() < p * 0.12)
-      put(x, y - 1, G_DOT, FADED);
+    /* A drift of fallen petals gathering around the roots. */
+    if (gh > 4 && Math.random() < p * 0.28)
+      put(x, y - 1, Math.random() < 0.35 ? pick(blooms()) : gDot(),
+          mix(rowBg[y - 1], RAMP[2 + ((Math.random() * 3) | 0)], 0.85));
   }
+
+  curKind = K_NONE;
+}
+
+const MAX_BLOBS = 32;
+
+function addBlobClamped(x, y, brx, bry, yTop) {
+  if (blobs.length >= MAX_BLOBS) return;
+  if (y - bry < yTop) y = yTop + bry;
+  blobs.push({ x, y, rx: brx, ry: bry });
 }
 
 function genTree() {
@@ -342,21 +676,65 @@ function genTree() {
   blobs = [];
   tips = [];
 
-  const rx = clamp(gw * 0.26, 6, 36);
-  const ry = clamp(gh * 0.26, 3, rx * 0.55);
+  /*
+   * Size the crown in pixels, not cells. Cell-based radii with a fixed cap made
+   * the canopy round in short wide viewports (the width clamped while the
+   * height kept growing with the row count) and left the trunk hairline thin.
+   * Working in pixels keeps one silhouette at every window size.
+   */
+  const hwPx = gw * cellW * 0.27;                                /* half-width  */
+  const hhPx = Math.min(hwPx / 1.95, gh * cellH * 0.27);         /* half-height */
+
+  const topPad = clamp(gh * 0.05, 2, 4);
+  let yTop = topPad;
+
+  /*
+   * Reserve room under the crown. A short window otherwise budgets every row to
+   * the canopy and clamps the trunk away to nothing, leaving a pancake of
+   * blossom resting on the grass.
+   */
+  const trunkMin = Math.max(3, gh * 0.18);
+  const ryFit = (gh - 2 - trunkMin - yTop - 0.8) / 2.15;
+
+  const ry = Math.max(Math.min(hhPx / cellH, ryFit), 3);
+  /* Re-derive the width from the height that actually survived, so a crown
+   * squeezed vertically narrows with it rather than smearing across the whole
+   * window at nine-to-one. */
+  const rx = Math.max(Math.min(hwPx / cellW, ry * (cellH / cellW) * 2.8), 6);
+  brW = Math.max(rx * 0.038, 0.8);
+
   const cx = gw * 0.5 + rand(-1.5, 1.5);
-  const cy = ry + 2.5;
+  let cy = yTop + ry + 0.8;
+  let ty = cy + ry * 1.15;
+
+  /*
+   * Cap how far the trunk runs. A tall narrow window — a phone in portrait —
+   * sizes the crown from the column count, then hands every remaining row to
+   * the trunk, growing a lamppost with a flower on top. Drop the whole tree
+   * down the viewport instead and leave sky above it.
+   */
+  const maxTrunk = 2 * rx * cellW * 0.85 / cellH;
+  const shift = (gh - 2 - ty) - maxTrunk;
+  if (shift > 0) {
+    yTop += shift;
+    cy += shift;
+    ty += shift;
+  }
+  ty = Math.min(ty, gh - 4);
 
   const bx = cx + rand(-2, 2);
   const tx = cx + rand(-2, 2);
-  const ty = Math.min(cy + ry * 1.15, gh - 4);
 
+  /* Limbs spread wide and reach above the crown's centre, so their tips are
+   * distributed through the whole canopy volume. */
   brXmin = cx - rx * 0.80;
   brXmax = cx + rx * 0.80;
-  brYmin = Math.max(1, cy - ry * 0.55);
+  brYmin = Math.max(yTop, cy - ry * 0.55);
 
   genGround(cx, rx);
-  genTrunk(bx, tx, ty);
+
+  curKind = K_WOOD;
+  genTrunk(bx, tx, ty, rx);
 
   const limbs = 3 + ((Math.random() * 2) | 0);
   const reach = (ty - brYmin) * 0.60 + 2;
@@ -366,30 +744,31 @@ function genTree() {
              + rand(-0.15, 0.15);
     genBranch(tx + rand(-1, 1), ty + rand(0, 1.5), na, reach * rand(0.75, 1.0), 0);
   }
+  curKind = K_NONE;
 
-  const MAX_BLOBS = 28;
-  blobs.push({ x: cx, y: cy - ry * 0.10, rx: rx * 0.50, ry: ry * 0.50 });
+  /*
+   * The canopy grows out of the limbs: one core blob, then a puff of blossom at
+   * every branch tip. Laying the crown out as a fixed arrangement of blobs
+   * instead gives a smooth, generic dome — the silhouette has to follow the tree
+   * that was actually grown.
+   */
+  addBlobClamped(cx, cy - ry * 0.10, rx * 0.50, ry * 0.50, yTop);
   for (const [px, py] of tips) {
-    if (blobs.length >= MAX_BLOBS - 4) break;
-    blobs.push({
-      x: px + rand(-1.5, 1.5),
-      y: py - rand(0, 1.5),
-      rx: rx * rand(0.18, 0.30),
-      ry: ry * rand(0.24, 0.38),
-    });
+    if (blobs.length >= MAX_BLOBS - 5) break;
+    addBlobClamped(px + rand(-1.5, 1.5), py - rand(0, 1.5),
+                   rx * rand(0.18, 0.30), ry * rand(0.24, 0.38), yTop);
   }
-
+  /* Low clumps so the underside hangs down in wisps. */
   for (let i = 0; i < 5 && blobs.length < MAX_BLOBS; i++) {
-    blobs.push({
-      x: cx + rand(-0.70, 0.70) * rx,
-      y: cy + rand(0.25, 0.60) * ry,
-      rx: rx * rand(0.18, 0.28),
-      ry: ry * rand(0.24, 0.34),
-    });
+    addBlobClamped(cx + rand(-0.70, 0.70) * rx, cy + rand(0.25, 0.60) * ry,
+                   rx * rand(0.18, 0.28), ry * rand(0.24, 0.34), yTop);
   }
 
-  genCanopy();
+  genCanopy(cx, rx, ry);
+  renderTree();
 }
+
+/* ---------- petals ---------- */
 
 function spawnPetal(scatter) {
   let x, y;
@@ -409,22 +788,23 @@ function spawnPetal(scatter) {
     amp: rand(0.10, 0.45),
     freq: rand(0.05, 0.18),
     phase: Math.random() * Math.PI * 2,
-    g: pick(PETAL_GLYPHS),
-    color: RAMP[1 + ((Math.random() * 5) | 0)],
+    g: pick(optAscii ? PETAL_ASC : PETAL_UNI),
+    /* Keep petals in the light half of the ramp — the dark end vanishes
+     * against the canopy they fall out of. */
+    color: RAMP[(Math.random() * 4) | 0],
     rest: -1,
   };
 }
 
 function resetPetals(scatter) {
-  const n = clamp((gw * 5 / 4) | 0, 16, 768);
+  const n = clamp((gw * optDensity / 4) | 0, 16, 768);
   petals = [];
   for (let i = 0; i < n; i++)
     petals.push(Math.random() < 0.6 ? spawnPetal(scatter) : null);
 }
 
 function updatePetals(dt) {
-
-  if (Math.random() < 0.008) windTarget = rand(-0.12, 0.45);
+  if (Math.random() < 0.008) windTarget = rand(-0.12, 0.45) * optWind;
   wind += (windTarget - wind) * 0.02;
 
   for (let i = 0; i < petals.length; i++) {
@@ -449,34 +829,49 @@ function updatePetals(dt) {
       p.y = gh - 1;
       p.rest = rand(2, 7);
       p.color = FADED;
-      p.g = G_DOT;
+      p.g = gDot();
     }
   }
 }
 
-function draw() {
-  const w = window.innerWidth, h = window.innerHeight;
-  const bg = ctx.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, "#1a1322");
-  bg.addColorStop(1, "#120e18");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-  ctx.textBaseline = "top";
+/* ---------- rendering ---------- */
 
-  const normal = `${FONT_SIZE}px "JetBrains Mono", "Fira Code", ui-monospace, monospace`;
-  const bold = "bold " + normal;
+const FONT = `${FONT_SIZE}px "JetBrains Mono", "Fira Code", ui-monospace, monospace`;
+
+function renderTree() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const bg = treeCtx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, BG_TOP);
+  bg.addColorStop(1, BG_BOT);
+  treeCtx.fillStyle = bg;
+  treeCtx.fillRect(0, 0, w, h);
+  treeCtx.textBaseline = "top";
+  treeCtx.font = FONT;
 
   for (let y = 0; y < gh; y++) {
     for (let x = 0; x < gw; x++) {
       const c = grid[y * gw + x];
       if (!c) continue;
-      ctx.font = c.bold ? bold : normal;
-      ctx.fillStyle = c.color;
-      ctx.fillText(c.g, x * cellW, y * cellH);
+      const px = x * cellW, py = y * cellH;
+      const cov = blockCov(c.g);
+      if (cov >= 0) {
+        treeCtx.fillStyle = mix(c.bg, c.color, cov);
+        treeCtx.fillRect(px, py, cellW + 1, cellH + 1);
+        continue;
+      }
+      treeCtx.fillStyle = c.bg;
+      treeCtx.fillRect(px, py, cellW + 1, cellH + 1);
+      treeCtx.fillStyle = c.color;
+      treeCtx.fillText(c.g, px, py);
     }
   }
+}
 
-  ctx.font = normal;
+function draw() {
+  ctx.drawImage(treeCanvas, 0, 0, window.innerWidth, window.innerHeight);
+
+  ctx.textBaseline = "top";
+  ctx.font = FONT;
   for (const p of petals) {
     if (!p) continue;
     const px = p.x | 0, py = p.y | 0;
@@ -488,14 +883,17 @@ function draw() {
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
+  for (const cv of [canvas, treeCanvas]) {
+    cv.width = window.innerWidth * dpr;
+    cv.height = window.innerHeight * dpr;
+  }
   canvas.style.width = window.innerWidth + "px";
   canvas.style.height = window.innerHeight + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  treeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  ctx.font = `${FONT_SIZE}px ui-monospace, monospace`;
-  cellW = ctx.measureText("\u2588").width;
+  ctx.font = FONT;
+  cellW = ctx.measureText(G_FULL).width;
   cellH = FONT_SIZE * 1.06;
   gw = Math.max((window.innerWidth / cellW) | 0, 20);
   gh = Math.max((window.innerHeight / cellH) | 0, 12);
@@ -511,17 +909,97 @@ window.addEventListener("resize", () => {
   resizeTimer = setTimeout(resize, 150);
 });
 
-window.addEventListener("keydown", e => {
-  if (e.key === "r" || e.key === "R") {
-    genTree();
-    resetPetals(false);
-  }
-  if (e.key === "Escape") menu.classList.remove("open");
-});
-
 const menu = document.getElementById("menu");
 const menuBtn = document.getElementById("menuBtn");
 const swatches = document.getElementById("swatches");
+
+const $ = id => document.getElementById(id);
+const rPetals = $("rPetals"), rWind = $("rWind"), rFps = $("rFps");
+const vPetals = $("vPetals"), vWind = $("vWind"), vFps = $("vFps");
+const cAscii = $("cAscii"), cFlat = $("cFlat"), cRegrow = $("cRegrow");
+
+/* Push the current options into the panel. Keeps the sliders and chips honest
+ * when a keyboard shortcut is what actually changed them. */
+function syncUI() {
+  rPetals.value = optDensity; vPetals.textContent = optDensity;
+  rWind.value   = optWind;    vWind.textContent   = optWind;
+  rFps.value    = optFps;     vFps.textContent    = optFps;
+  cAscii.classList.toggle("on", optAscii);
+  cFlat.classList.toggle("on", optFlat);
+  swatches.querySelectorAll(".swatch").forEach(el =>
+    el.classList.toggle("active", el.dataset.key === paletteKey));
+}
+
+function regrow() {
+  genTree();
+  resetPetals(false);
+}
+
+/* Palette, ASCII and flat all change how cells are generated, not just drawn. */
+function restyle() {
+  applyRamp();
+  regrow();
+}
+
+function setPalette(key) {
+  paletteKey = key;
+  saveOpts();
+  restyle();
+  syncUI();
+}
+
+rPetals.addEventListener("input", () => {
+  optDensity = +rPetals.value;
+  vPetals.textContent = optDensity;
+  resetPetals(false);
+  saveOpts();
+});
+rWind.addEventListener("input", () => {
+  optWind = +rWind.value;
+  vWind.textContent = optWind;
+  saveOpts();
+});
+rFps.addEventListener("input", () => {
+  optFps = +rFps.value;
+  vFps.textContent = optFps;
+  saveOpts();
+});
+cAscii.addEventListener("click", () => {
+  optAscii = !optAscii;
+  saveOpts();
+  restyle();
+  syncUI();
+});
+cFlat.addEventListener("click", () => {
+  optFlat = !optFlat;
+  saveOpts();
+  restyle();
+  syncUI();
+});
+cRegrow.addEventListener("click", regrow);
+
+/* Same shortcuts as the terminal build. */
+window.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const i = PKEYS.indexOf(paletteKey);
+  switch (e.key) {
+    case "r": case "R": regrow(); return;
+    case "c": setPalette(PKEYS[(i + 1) % PKEYS.length]); return;
+    case "C": setPalette(PKEYS[(i + PKEYS.length - 1) % PKEYS.length]); return;
+    case "a": case "A": cAscii.click(); return;
+    case "t": case "T": cFlat.click(); return;
+    case "p": optDensity = clamp(optDensity + 1, 1, 10); resetPetals(false); break;
+    case "P": optDensity = clamp(optDensity - 1, 1, 10); resetPetals(false); break;
+    case "w": optWind = clamp(optWind + 1, 0, 10); break;
+    case "W": optWind = clamp(optWind - 1, 0, 10); break;
+    case "+": case "=": optFps = clamp(optFps + 5, 5, 60); break;
+    case "-": case "_": optFps = clamp(optFps - 5, 5, 60); break;
+    case "Escape": menu.classList.remove("open"); return;
+    default: return;
+  }
+  saveOpts();
+  syncUI();
+});
 
 const SWATCH_PREVIEW = {
   sakura: "#f76fae", rose: "#f76a8a", blush: "#f08098", magenta: "#d040b0",
@@ -530,21 +1008,13 @@ const SWATCH_PREVIEW = {
   matcha: "#90c050", white: "#ffe4ee", ink: "#8880a0",
 };
 
-for (const key of Object.keys(PALETTES)) {
+for (const key of PKEYS) {
   const b = document.createElement("button");
-  b.className = "swatch" + (key === paletteKey ? " active" : "");
+  b.className = "swatch";
+  b.dataset.key = key;
   b.style.setProperty("--c", SWATCH_PREVIEW[key]);
   b.title = key;
-  b.addEventListener("click", () => {
-    paletteKey = key;
-    localStorage.setItem("csakura-palette", key);
-    swatches.querySelectorAll(".swatch").forEach(el => el.classList.remove("active"));
-    b.classList.add("active");
-    applyRamp();
-    genTree();
-    resetPetals(false);
-    menu.classList.remove("open");
-  });
+  b.addEventListener("click", () => setPalette(key));
   swatches.appendChild(b);
 }
 
@@ -556,18 +1026,18 @@ document.addEventListener("click", e => {
   if (!menu.contains(e.target)) menu.classList.remove("open");
 });
 
-const FRAME_MS = 1000 / FPS;
 let last = 0;
 function loop(now) {
   requestAnimationFrame(loop);
-  if (now - last < FRAME_MS) return;
+  if (now - last < 1000 / optFps) return;
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   updatePetals(dt);
   draw();
 }
 
-applyRamp();
+loadOpts();
+syncUI();
 resize();
 requestAnimationFrame(loop);
 </script>

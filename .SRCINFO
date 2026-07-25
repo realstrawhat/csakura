@@ -6,11 +6,8 @@ pkgbase = csakura
 	arch = x86_64
 	arch = aarch64
 	license = MIT
-	makedepends = git
-	makedepends = gcc
-	makedepends = make
 	depends = ncurses
-	source = git+https://github.com/realstrawhat/csakura.git#branch=main
-	sha256sums = SKIP
+	source = csakura-2.0.0.tar.gz::https://github.com/realstrawhat/csakura/archive/refs/tags/v2.0.0.tar.gz
+	sha256sums = 0000000000000000000000000000000000000000000000000000000000000000
 
 pkgname = csakura

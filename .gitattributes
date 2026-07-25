@@ -1,0 +1,5 @@
+# Everything here is consumed on Linux/macOS — a CRLF that sneaks in from a
+# Windows checkout breaks PKGBUILD under bash and Makefile recipe lines.
+* text=auto eol=lf
+
+*.png binary

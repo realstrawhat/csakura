@@ -1,4 +1,4 @@
-# Maintainer: realstrawhat
+# Maintainer: realstrawhat <realstrawhat@users.noreply.github.com>
 
 pkgname=csakura
 pkgver=2.0.0
@@ -8,23 +8,18 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/realstrawhat/csakura"
 license=('MIT')
 depends=('ncurses')
-makedepends=('git' 'gcc' 'make')
-source=("git+${url}.git#branch=main")
-sha256sums=('SKIP')
-
-pkgver() {
-    cd "${srcdir}/${pkgname}"
-    printf "2.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
-}
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+# Fill in with `updpkgsums` once the v2.0.0 tag is pushed.
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
 
 build() {
-    cd "${srcdir}/${pkgname}"
+    cd "$pkgname-$pkgver"
     make
 }
 
 package() {
-    cd "${srcdir}/${pkgname}"
-    make PREFIX=/usr DESTDIR="${pkgdir}" install
-    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
-    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    cd "$pkgname-$pkgver"
+    make PREFIX=/usr DESTDIR="$pkgdir" install
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }
