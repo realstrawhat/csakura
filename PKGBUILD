@@ -9,8 +9,7 @@ url="https://github.com/realstrawhat/csakura"
 license=('MIT')
 depends=('ncurses')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-# Fill in with `updpkgsums` once the v2.0.0 tag is pushed.
-sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums=('99a855bd1cd4ff76466ff74de298b6261b1d30ecb5430970a001f3d0e9bc318d')
 
 build() {
     cd "$pkgname-$pkgver"

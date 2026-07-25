@@ -37,7 +37,7 @@ git push origin v2.0.0
 Then, in the repo root:
 
 ```sh
-# 2. Fill in the real checksum (PKGBUILD ships a zeroed placeholder).
+# 2. Refresh the checksum for the new tarball.
 updpkgsums                              # pacman-contrib
 
 # 3. Regenerate .SRCINFO — the AUR rejects a push whose .SRCINFO
