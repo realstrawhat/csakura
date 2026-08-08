@@ -1,0 +1,143 @@
+{
+  "updated": "2026-08-08T03:44:01Z",
+  "clones": {
+    "total": 1066,
+    "uniques": 286,
+    "measured": 366,
+    "baseline": 700,
+    "days": {
+      "2026-07-24": {
+        "count": 34,
+        "uniques": 21
+      },
+      "2026-07-25": {
+        "count": 58,
+        "uniques": 40
+      },
+      "2026-07-26": {
+        "count": 72,
+        "uniques": 48
+      },
+      "2026-07-27": {
+        "count": 20,
+        "uniques": 15
+      },
+      "2026-07-28": {
+        "count": 24,
+        "uniques": 21
+      },
+      "2026-07-29": {
+        "count": 20,
+        "uniques": 15
+      },
+      "2026-07-30": {
+        "count": 14,
+        "uniques": 13
+      },
+      "2026-07-31": {
+        "count": 7,
+        "uniques": 6
+      },
+      "2026-08-01": {
+        "count": 15,
+        "uniques": 15
+      },
+      "2026-08-02": {
+        "count": 10,
+        "uniques": 9
+      },
+      "2026-08-03": {
+        "count": 11,
+        "uniques": 10
+      },
+      "2026-08-04": {
+        "count": 36,
+        "uniques": 33
+      },
+      "2026-08-05": {
+        "count": 30,
+        "uniques": 25
+      },
+      "2026-08-06": {
+        "count": 15,
+        "uniques": 15
+      }
+    }
+  },
+  "views": {
+    "total": 669,
+    "uniques": 291,
+    "measured": 669,
+    "baseline": 0,
+    "days": {
+      "2026-07-24": {
+        "count": 31,
+        "uniques": 21
+      },
+      "2026-07-25": {
+        "count": 134,
+        "uniques": 26
+      },
+      "2026-07-26": {
+        "count": 95,
+        "uniques": 21
+      },
+      "2026-07-27": {
+        "count": 15,
+        "uniques": 13
+      },
+      "2026-07-28": {
+        "count": 11,
+        "uniques": 9
+      },
+      "2026-07-29": {
+        "count": 24,
+        "uniques": 9
+      },
+      "2026-07-30": {
+        "count": 19,
+        "uniques": 9
+      },
+      "2026-07-31": {
+        "count": 23,
+        "uniques": 14
+      },
+      "2026-08-01": {
+        "count": 19,
+        "uniques": 15
+      },
+      "2026-08-02": {
+        "count": 32,
+        "uniques": 14
+      },
+      "2026-08-03": {
+        "count": 11,
+        "uniques": 7
+      },
+      "2026-08-04": {
+        "count": 156,
+        "uniques": 81
+      },
+      "2026-08-05": {
+        "count": 53,
+        "uniques": 32
+      },
+      "2026-08-06": {
+        "count": 46,
+        "uniques": 20
+      }
+    }
+  },
+  "releaseDownloads": 0,
+  "baseline": {
+    "clones": {
+      "count": 700,
+      "uniques": 0
+    },
+    "views": {
+      "count": 0,
+      "uniques": 0
+    },
+    "note": "Owner-supplied estimate for 2026-07-12..2026-07-23, the period between repo creation and the start of collection. GitHub had already discarded the real figures for those days, so this number is not verifiable against any API. Unique cloners for that period are unknown and counted as 0, which is why clones.uniques covers only the measured days."
+  }
+}
