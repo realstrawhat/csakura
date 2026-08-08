@@ -1,5 +1,6 @@
 # csakura 2.0 🌸
 
+[![clones](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frealstrawhat%2Fcsakura%2Ftraffic-data%2Ftraffic.json&query=%24.clones.total&label=clones&color=f76fae&style=flat-square)](#clone-tracking)
 [![stars](https://img.shields.io/github/stars/realstrawhat/csakura?label=stars&color=f76fae&style=flat-square)](https://github.com/realstrawhat/csakura/stargazers)
 [![license](https://img.shields.io/github/license/realstrawhat/csakura?color=f76fae&style=flat-square)](LICENSE)
 
@@ -171,7 +172,8 @@ on screen when it moves. Hover it for the breakdown. See
 ## Clone tracking
 
 `.github/workflows/traffic.yml` records how many times the repo has been
-cloned, and `web/index.html` displays the total.
+cloned. The total is shown by the **clones** badge at the top of this file and
+in the corner of `web/index.html`, both reading the same published figure.
 
 GitHub's traffic API is **not public** — it needs a token with push access — so
 the browser cannot read it directly. The workflow queries it from CI instead
