@@ -1,0 +1,110 @@
+# Records repository clone/view traffic so it survives GitHub's 14-day
+# retention window, and publishes the running total for web/index.html.
+#
+# Needs a token with push access: the traffic API is not public, and the
+# built-in GITHUB_TOKEN cannot reach it (Actions' `permissions:` block has no
+# `administration` key). Create a fine-grained PAT scoped to this repo with
+# `Administration: Read-only`, and save it as the secret TRAFFIC_TOKEN.
+#
+# Results land on the orphan `traffic-data` branch, never on main, so this
+# never touches the source history or the contributors list.
+
+name: traffic
+
+on:
+  schedule:
+    # Every six hours. Traffic is bucketed by day, so extra runs only sharpen
+    # the current day's partial count — they cannot double-count (see the
+    # date-keyed merge in scripts/merge-traffic.jq).
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+# Least privilege, split across two tokens: TRAFFIC_TOKEN only ever reads the
+# traffic API and needs no write access anywhere, while the branch push uses the
+# built-in GITHUB_TOKEN, which is scoped to this repo and expires with the job.
+# A leaked TRAFFIC_TOKEN therefore cannot modify anything.
+permissions:
+  contents: write
+
+concurrency:
+  group: traffic
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the merge script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Collect traffic
+        env:
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          GIT_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::TRAFFIC_TOKEN is not set. Create a fine-grained PAT" \
+                 "with 'Administration: Read-only' on ${REPO} and add it as a" \
+                 "repository secret named TRAFFIC_TOKEN."
+            exit 1
+          fi
+
+          # Fetch first: if the token lacks push access the API 403s, and there
+          # is no point creating a branch for data we could not read.
+          gh api "repos/${REPO}/traffic/clones" > clones.json
+          gh api "repos/${REPO}/traffic/views"  > views.json
+          gh api "repos/${REPO}/releases?per_page=100" \
+            --jq '[.[].assets[].download_count] | add // 0' > releases.txt
+
+          # The data branch starts empty on the first ever run.
+          if git clone --quiet --depth 1 --branch traffic-data \
+               "https://x-access-token:${GIT_TOKEN}@github.com/${REPO}.git" data 2>/dev/null; then
+            echo "continuing existing history"
+          else
+            echo "first run — creating the traffic-data branch"
+            git clone --quiet --depth 1 \
+              "https://x-access-token:${GIT_TOKEN}@github.com/${REPO}.git" data
+            git -C data checkout --quiet --orphan traffic-data
+            git -C data rm --quiet -rf .
+          fi
+
+          # Seeded on setup with the history that predates collection; falls
+          # back to empty so a fresh branch still works.
+          [ -f data/traffic.json ] || echo '{}' > data/traffic.json
+
+          node scripts/merge-traffic.mjs \
+            data/traffic.json clones.json views.json releases.txt \
+            > data/traffic.next.json
+
+          mv data/traffic.next.json data/traffic.json
+
+          node -e '
+            const d = require("./data/traffic.json");
+            console.log(`clones ${d.clones.total} (${d.clones.measured} measured ` +
+                        `+ ${d.clones.baseline} baseline) · views ${d.views.total}`);
+          '
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          cd data
+
+          # Attributed to the Actions bot, on a branch that is not the default
+          # one, so this never appears in the repository's contributor list.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add traffic.json
+          if git diff --quiet --cached; then
+            echo "no change"
+            exit 0
+          fi
+
+          git commit --quiet -m "traffic: $(date -u +%Y-%m-%d\ %H:%M) UTC"
+          git push --quiet origin traffic-data

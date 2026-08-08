@@ -1,5 +1,8 @@
 # csakura 2.0 🌸
 
+[![stars](https://img.shields.io/github/stars/realstrawhat/csakura?label=stars&color=f76fae&style=flat-square)](https://github.com/realstrawhat/csakura/stargazers)
+[![license](https://img.shields.io/github/license/realstrawhat/csakura?color=f76fae&style=flat-square)](LICENSE)
+
 A sakura tree with falling petals for your terminal — in the spirit of
 `cmatrix` and `cava`, but prettier.
 
@@ -160,6 +163,63 @@ The faint ⋮ in the corner opens the full set of controls — palette, petal
 density, wind, speed, ASCII glyphs and flat mode — and the terminal keys all
 work too (`r` `c`/`C` `a` `t` `p`/`P` `w`/`W` `+`/`-`). Settings persist across
 visits. You can also enable GitHub Pages on the `/web` folder for a live demo.
+
+The bottom-left corner shows the running total of repository clones, counted up
+on screen when it moves. Hover it for the breakdown. See
+[Clone tracking](#clone-tracking) for how it is collected.
+
+## Clone tracking
+
+`.github/workflows/traffic.yml` records how many times the repo has been
+cloned, and `web/index.html` displays the total.
+
+GitHub's traffic API is **not public** — it needs a token with push access — so
+the browser cannot read it directly. The workflow queries it from CI instead
+and publishes a plain `traffic.json` to the orphan `traffic-data` branch, which
+the page reads unauthenticated. Nothing is ever written to `main`, and the
+commits land off the default branch so they stay out of the contributor list.
+
+The API also only serves a **rolling 14-day window**. A total read straight
+from it would shrink as old days expired, so the workflow folds each window
+into a permanent record keyed by date. The merge is idempotent: re-running it
+replaces a day's entry rather than adding to it, so a partial count for the
+current day is corrected on the next run and repeated runs cannot double-count.
+
+### Setup
+
+1. Create a fine-grained PAT scoped to this repo with **`Administration:
+   Read-only`** — no other permission — and save it as the repository secret
+   **`TRAFFIC_TOKEN`**. It is needed because the built-in `GITHUB_TOKEN` cannot
+   reach the traffic API: Actions' `permissions:` block has no `administration`
+   key. The PAT is used for nothing else; the branch push runs on
+   `GITHUB_TOKEN`, so the PAT stays read-only and a leak of it cannot modify
+   anything.
+2. Seed the data branch with the history collected so far, otherwise the first
+   scheduled run starts from zero:
+
+   ```sh
+   git checkout --orphan traffic-data
+   git rm -rf .
+   cp scripts/traffic-seed.json traffic.json
+   git add traffic.json && git commit -m "traffic: seed"
+   git push -u origin traffic-data
+   git checkout main
+   ```
+
+3. Run the workflow once from the Actions tab to confirm the token works.
+
+### Reading the numbers
+
+- **clones.total** is the headline: `measured + baseline`.
+- **measured** is what the workflow actually recorded.
+- **baseline** is a manual figure for traffic from before collection started.
+  GitHub had already discarded those days, so it is an estimate that no API can
+  confirm. It is kept as its own field, and shown separately in the tooltip, so
+  the recorded days stay auditable.
+- **uniques** is a sum of per-day unique cloners, which counts one person who
+  clones on three days as three. GitHub only dedupes inside a single 14-day
+  window — for the seed data its own window figure is 271 against a daily sum
+  of 286. Treat it as an upper bound on people, never a headcount.
 
 ## Notes
 

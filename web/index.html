@@ -22,6 +22,29 @@
   .hint:hover { opacity: 0.9; }
   .hint a { color: #f2a6c8; text-decoration: none; }
 
+  /* Live release-download total, mirroring the hint in the opposite corner. */
+  .dl {
+    position: fixed;
+    bottom: 14px;
+    left: 18px;
+    font: 12px/1.6 "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+    color: #cdb8d4;
+    opacity: 0.45;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    user-select: none;
+    transition: opacity 0.4s;
+  }
+  .dl:hover { opacity: 0.9; }
+  .dl b {
+    color: #f2a6c8;
+    font-weight: 400;
+    transition: color 0.9s, text-shadow 0.9s;
+  }
+  /* Held while a new total counts up, so an increment that lands mid-visit
+   * is visible rather than a silent swap. */
+  .dl.live b { color: #fff; text-shadow: 0 0 8px rgba(242, 166, 200, 0.7); }
+
   .menu {
     position: fixed;
     top: 12px;
@@ -167,6 +190,8 @@
     </div>
   </div>
 </div>
+<a class="dl" id="dl" hidden
+   href="https://github.com/realstrawhat/csakura"><b id="dlN">0</b> clones</a>
 <div class="hint">[r] regrow &nbsp;·&nbsp; [⋮] options &nbsp;·&nbsp; <a href="https://github.com/realstrawhat/csakura">csakura</a></div>
 <script>
 "use strict";
@@ -1025,6 +1050,126 @@ menuBtn.addEventListener("click", e => {
 document.addEventListener("click", e => {
   if (!menu.contains(e.target)) menu.classList.remove("open");
 });
+
+/* ---------- live download counter ---------- */
+
+/*
+ * Total clones of the repository, which is what people mean by "downloads".
+ *
+ * This cannot be read from the browser. GitHub's traffic API requires a token
+ * with push access, and shipping one to a public page would hand every visitor
+ * write access to the repo. So .github/workflows/traffic.yml polls it from CI
+ * and publishes a plain JSON file to the `traffic-data` branch; this only ever
+ * reads that file, unauthenticated.
+ *
+ * The same workflow is what gives the number a memory: the traffic API serves
+ * a rolling 14-day window, so a total accumulated anywhere else would silently
+ * shrink as old days expired.
+ */
+
+const DL_SRC = "https://raw.githubusercontent.com/realstrawhat/csakura/traffic-data/traffic.json";
+/* raw.githubusercontent caches for around five minutes and the workflow only
+ * refreshes every six hours, so polling faster than this buys nothing. */
+const DL_POLL = 5 * 60 * 1000;
+const DL_MIN_GAP = 60 * 1000;
+
+const dlEl = document.getElementById("dl");
+const dlNum = document.getElementById("dlN");
+
+let dlTotal = null;     /* last total we know of */
+let dlLastFetch = 0;
+let dlRaf = null;
+let dlLiveTimer = null;
+
+/* Hover text carries the detail the one-line counter cannot. Daily uniques are
+ * summed, so someone who clones on three days counts three times — it is an
+ * upper bound on people, and says so rather than implying a headcount. */
+function dlTitle(d) {
+  const n = v => (v || 0).toLocaleString("en-US");
+  const c = d.clones || {}, lines = [];
+
+  lines.push(`${n(c.total)} clones`);
+  /* Keep the estimated head start separate from what was actually measured,
+   * so the headline number is never mistaken for all-measured. */
+  if (c.baseline)
+    lines.push(`  ${n(c.measured)} recorded + ${n(c.baseline)} before tracking began`);
+  lines.push(`  up to ${n(c.uniques)} unique cloners`);
+  lines.push(`${n(d.views && d.views.total)} views`);
+  if (d.releaseDownloads) lines.push(`${n(d.releaseDownloads)} release downloads`);
+  if (d.updated) lines.push(`updated ${d.updated.replace("T", " ").replace("Z", " UTC")}`);
+  return lines.join("\n");
+}
+
+async function dlFetch() {
+  const res = await fetch(DL_SRC, { cache: "no-store" });
+  /* 404 until the workflow has run at least once. */
+  if (!res.ok) throw new Error("traffic.json " + res.status);
+  const data = await res.json();
+  const total = data.clones && data.clones.total;
+  if (typeof total !== "number") throw new Error("malformed traffic.json");
+  dlEl.title = dlTitle(data);
+  return total;
+}
+
+/* Count up to the new total instead of snapping to it. `instant` is for the
+ * cached value restored on load, which has nothing to count up from. */
+function dlShow(total, instant) {
+  dlEl.hidden = false;
+  const from = (dlTotal === null || instant) ? total : dlTotal;
+  dlTotal = total;
+
+  if (dlRaf) cancelAnimationFrame(dlRaf);
+  if (from === total) {
+    dlNum.textContent = total.toLocaleString("en-US");
+    return;
+  }
+
+  dlEl.classList.add("live");
+  clearTimeout(dlLiveTimer);
+
+  const t0 = performance.now(), dur = 700;
+  const step = now => {
+    const t = Math.min((now - t0) / dur, 1);
+    const e = 1 - Math.pow(1 - t, 3);
+    dlNum.textContent = Math.round(from + (total - from) * e).toLocaleString("en-US");
+    if (t < 1) {
+      dlRaf = requestAnimationFrame(step);
+    } else {
+      dlRaf = null;
+      dlLiveTimer = setTimeout(() => dlEl.classList.remove("live"), 900);
+    }
+  };
+  dlRaf = requestAnimationFrame(step);
+}
+
+async function dlRefresh() {
+  const now = Date.now();
+  if (now - dlLastFetch < DL_MIN_GAP) return;
+  dlLastFetch = now;
+  try {
+    const total = await dlFetch();
+    try {
+      localStorage.setItem("csakura-traffic", JSON.stringify({ total, at: now }));
+    } catch (e) { /* private mode */ }
+    dlShow(total);
+  } catch (e) {
+    /* Offline, or the workflow has not published yet: leave whatever is on
+     * screen. Nothing is shown at all until one fetch (or a cached value)
+     * succeeds, so a missing traffic.json is invisible rather than broken. */
+  }
+}
+
+/* Seed from the last known total so a slow or failed load still shows a number. */
+try {
+  const cached = JSON.parse(localStorage.getItem("csakura-traffic") || "null");
+  if (cached && typeof cached.total === "number") dlShow(cached.total, true);
+} catch (e) { /* ignore */ }
+
+setInterval(() => { if (!document.hidden) dlRefresh(); }, DL_POLL);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) dlRefresh();
+});
+dlRefresh();
 
 let last = 0;
 function loop(now) {
