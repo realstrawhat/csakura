@@ -1,9 +1,9 @@
 {
-  "updated": "2026-08-15T06:56:55Z",
+  "updated": "2026-08-15T12:58:48Z",
   "clones": {
-    "total": 1349,
-    "uniques": 445,
-    "measured": 649,
+    "total": 1371,
+    "uniques": 455,
+    "measured": 671,
     "baseline": 700,
     "days": {
       "2026-07-24": {
@@ -89,13 +89,17 @@
       "2026-08-13": {
         "count": 37,
         "uniques": 21
+      },
+      "2026-08-14": {
+        "count": 22,
+        "uniques": 10
       }
     }
   },
   "views": {
-    "total": 868,
-    "uniques": 402,
-    "measured": 868,
+    "total": 878,
+    "uniques": 409,
+    "measured": 878,
     "baseline": 0,
     "days": {
       "2026-07-24": {
@@ -181,6 +185,10 @@
       "2026-08-13": {
         "count": 13,
         "uniques": 12
+      },
+      "2026-08-14": {
+        "count": 10,
+        "uniques": 7
       }
     }
   },
