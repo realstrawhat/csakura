@@ -206,7 +206,7 @@ current day is corrected on the next run and repeated runs cannot double-count.
    ```sh
    git checkout --orphan traffic-data
    git rm -rf .
-   cp scripts/traffic-seed.json traffic.json
+   git show main:scripts/traffic-seed.json > traffic.json
    git add traffic.json && git commit -m "traffic: seed"
    git push -u origin traffic-data
    git checkout main

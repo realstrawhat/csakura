@@ -15,7 +15,7 @@ on:
   schedule:
     # Every six hours. Traffic is bucketed by day, so extra runs only sharpen
     # the current day's partial count — they cannot double-count (see the
-    # date-keyed merge in scripts/merge-traffic.jq).
+    # date-keyed merge in scripts/merge-traffic.mjs).
     - cron: "17 */6 * * *"
   workflow_dispatch:
 
