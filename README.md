@@ -76,14 +76,17 @@ Uninstall: `sudo pacman -R csakura` or `sudo make uninstall`.
 
 ### macOS
 
-With [Homebrew](https://brew.sh):
+With [Homebrew](https://brew.sh). This repository doubles as its own tap, so
+there is nothing to clone by hand:
 
 ```sh
-brew install ncurses
-git clone https://github.com/realstrawhat/csakura.git
-cd csakura
-brew install --HEAD --formula ./Formula/csakura.rb
+brew tap realstrawhat/csakura https://github.com/realstrawhat/csakura
+brew install realstrawhat/csakura/csakura         # latest release
+brew install --HEAD realstrawhat/csakura/csakura  # builds from main
 ```
+
+Once the tap is added, plain `brew install csakura` works too, as long as no
+other tap you have provides that name. Homebrew pulls in `ncurses` itself.
 
 Or build yourself:
 
@@ -95,7 +98,8 @@ make
 sudo make install
 ```
 
-Then run `csakura`. Uninstall with `brew uninstall csakura` or `sudo make uninstall`.
+Then run `csakura`. Uninstall with `brew uninstall csakura` (and
+`brew untap realstrawhat/csakura`) or `sudo make uninstall`.
 
 ### Other Linux
 
