@@ -6,6 +6,7 @@ class Csakura < Formula
   license "MIT"
   head "https://github.com/realstrawhat/csakura.git", branch: "main"
 
+  depends_on "pkgconf" => :build
   depends_on "ncurses"
 
   def install
