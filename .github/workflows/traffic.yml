@@ -100,11 +100,12 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Every run commits. merge-traffic.mjs stamps a fresh `updated`, so
+          # the file always differs even on the three runs a day that bring no
+          # new clone data — GitHub's traffic API only publishes whole days,
+          # about a day behind. That timestamp is the liveness signal the page
+          # shows on hover: it is the only thing separating "no new clones yet"
+          # from "the collector died", so it is worth one small commit per run.
           git add traffic.json
-          if git diff --quiet --cached; then
-            echo "no change"
-            exit 0
-          fi
-
           git commit --quiet -m "traffic: $(date -u +%Y-%m-%d\ %H:%M) UTC"
           git push --quiet origin traffic-data

@@ -1094,6 +1094,13 @@ function dlTitle(d) {
   if (c.baseline)
     lines.push(`  ${n(c.measured)} recorded + ${n(c.baseline)} before tracking began`);
   lines.push(`  up to ${n(c.uniques)} unique cloners`);
+  /* GitHub's traffic API serves whole days only, and runs about a day behind,
+   * so the total sits still between one day's data landing and the next.
+   * Naming the last day actually counted is what separates "nothing new has
+   * landed yet" from "the collector broke" — the `updated` line below moves
+   * every run either way, so on its own it cannot tell those apart. */
+  const counted = Object.keys(c.days || {});
+  if (counted.length) lines.push(`  counted through ${counted[counted.length - 1]}`);
   lines.push(`${n(d.views && d.views.total)} views`);
   if (d.releaseDownloads) lines.push(`${n(d.releaseDownloads)} release downloads`);
   if (d.updated) lines.push(`updated ${d.updated.replace("T", " ").replace("Z", " UTC")}`);

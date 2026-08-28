@@ -226,6 +226,14 @@ current day is corrected on the next run and repeated runs cannot double-count.
   clones on three days as three. GitHub only dedupes inside a single 14-day
   window — for the seed data its own window figure is 271 against a daily sum
   of 286. Treat it as an upper bound on people, never a headcount.
+- **The total steps once a day, not continuously.** GitHub's traffic API serves
+  whole days only and runs about a day behind, so three of the four scheduled
+  runs fetch no new clone data and the figure sits still between them. The
+  tooltip shows `counted through <date>` next to `updated <time>`: the first is
+  how far the data reaches, the second is when the collector last ran. A
+  `counted through` a day or so behind today, with a fresh `updated`, is
+  normal — that is the API lag, not a stall. Both frozen for more than a couple
+  of days means the workflow is failing; check the Actions tab.
 
 ## Notes
 
