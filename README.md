@@ -122,6 +122,8 @@ csakura [options]
   -a        ASCII glyphs only (no unicode blossoms)
   -t        flat mode: never paint cell backgrounds, so a
             transparent terminal shows through the canopy
+  -H COLOR  canopy shadow colour, 0-255, or none to leave the
+            shadow unpainted (default: the palette's own shade)
   -h        help
   -v        version
 
@@ -139,6 +141,8 @@ csakura -f 12 -p 3      # chill / low CPU (nice in a side pane)
 csakura -p 10 -w 6      # windy petal storm
 csakura -c mint         # mint palette
 csakura -t              # let a transparent terminal show through
+csakura -H 235          # match the shadow to your own background
+csakura -H none         # shadow unpainted, blossom still shaded
 ```
 
 ## Shortcuts
@@ -243,6 +247,10 @@ current day is corrected on the next run and repeated runs cannot double-count.
 - Unicode blossoms need a font that has them (most Nerd Fonts do). Use `-a` if not.
 - On macOS, Homebrew’s `ncurses` is recommended for the best color support.
 - Running over a transparent or image background? Use `-t`.
+- Canopy sitting on a visibly different dark square? That is the shadow the
+  crown is painted on, and it ships as a neutral dark grey. `-H COLOR` sets it
+  to your own background colour, and `-H none` leaves it unpainted so only the
+  blossom is shaded.
 
 ## Attribution
 

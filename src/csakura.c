@@ -106,6 +106,13 @@ static int    opt_density = 5;
 static double opt_wind    = 1.0;
 static bool   opt_ascii   = false;
 static bool   opt_flat    = false;   /* keep the terminal background visible */
+/*
+ * Canopy shadow override. HAZE_PALETTE keeps the shade the palette ships,
+ * -1 leaves the shadow unpainted so a transparent terminal shows through it,
+ * and 0-255 is an xterm index for matching your own background.
+ */
+#define HAZE_PALETTE (-2)
+static int    opt_haze    = HAZE_PALETTE;
 static int    opt_palette = 0;
 
 /* Whether cell backgrounds are actually painted (needs 256 colours). */
@@ -163,6 +170,27 @@ static int find_palette(const char *name)
     return -1;
 }
 
+/*
+ * -H takes an xterm colour index so the canopy shadow can be matched to your
+ * own background, or "none" to leave it unpainted while the blossom keeps its
+ * shading. Anything else is a usage error rather than a silent fallback.
+ */
+static bool parse_haze(const char *s, int *out)
+{
+    if (strcmp(s, "none") == 0 || strcmp(s, "off") == 0) {
+        *out = -1;
+        return true;
+    }
+
+    char *end;
+    long v = strtol(s, &end, 10);
+    if (end == s || *end != '\0' || v < 0 || v > 255)
+        return false;
+
+    *out = (int)v;
+    return true;
+}
+
 static void update_shaded(void)
 {
     shaded = !opt_flat && has_colors() && COLORS >= 256 && COLOR_PAIRS >= NPAIRS;
@@ -184,7 +212,7 @@ static void apply_palette(void)
         fg[F_FADED]   = p->ramp[5];
 
         bg[B_DEF]  = -1;
-        bg[B_HAZE] = p->haze;
+        bg[B_HAZE] = opt_haze == HAZE_PALETTE ? p->haze : (short)opt_haze;
         for (int i = 0; i < 8; i++)
             bg[B_P0 + i] = p->ramp[i];
     } else {
@@ -900,6 +928,8 @@ static void usage(FILE *out)
         "  -a        ASCII glyphs only (no unicode blossoms)\n"
         "  -t        flat mode: never paint cell backgrounds, so a\n"
         "            transparent terminal shows through the canopy\n"
+        "  -H COLOR  canopy shadow colour, 0-255, or none to leave the\n"
+        "            shadow unpainted (default: the palette's own shade)\n"
         "  -h        show this help\n"
         "  -v        show version\n"
         "\n"
@@ -926,7 +956,7 @@ static void usage(FILE *out)
 int main(int argc, char **argv)
 {
     int opt;
-    while ((opt = getopt(argc, argv, "f:p:w:c:athv")) != -1) {
+    while ((opt = getopt(argc, argv, "f:p:w:c:aH:thv")) != -1) {
         switch (opt) {
         case 'f':
             opt_fps = atoi(optarg);
@@ -958,6 +988,14 @@ int main(int argc, char **argv)
         }
         case 'a':
             opt_ascii = true;
+            break;
+        case 'H':
+            if (!parse_haze(optarg, &opt_haze)) {
+                fprintf(stderr,
+                        "csakura: bad haze colour '%s', want 0-255 or none\n",
+                        optarg);
+                return 1;
+            }
             break;
         case 't':
             opt_flat = true;

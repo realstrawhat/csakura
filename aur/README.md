@@ -24,9 +24,30 @@ installed at a time.
    ssh aur@aur.archlinux.org help
    ```
 
+## No Arch machine? Use Docker
+
+`makepkg`, `updpkgsums` and `namcap` only exist on Arch. From Windows or any
+other host, run them in a container. Two gotchas this recipe handles: `makepkg`
+refuses to run as root, and building straight on the bind mount litters the
+repo with artifacts.
+
+```sh
+docker run --rm -v "$PWD:/work" archlinux:base-devel bash -c '
+  pacman -Syu --noconfirm --needed base-devel ncurses pacman-contrib namcap git
+  useradd -m builder
+  cp -r /work /home/builder/pkg && chown -R builder /home/builder/pkg
+  su builder -c "cd /home/builder/pkg && makepkg -f && makepkg --printsrcinfo > .SRCINFO"
+  cp /home/builder/pkg/.SRCINFO /work/.SRCINFO
+  su builder -c "cd /home/builder/pkg && namcap PKGBUILD *.pkg.tar.zst"
+'
+```
+
+That builds the package, regenerates `.SRCINFO` back into your working copy,
+and lints the result. On Windows use the absolute path instead of `$PWD`.
+
 ## Cutting a release
 
-Everything below runs on an Arch machine (or an `archlinux` container).
+Everything below runs on an Arch machine (or the container above).
 
 ```sh
 # 1. Tag upstream first — the stable PKGBUILD downloads this tarball.
