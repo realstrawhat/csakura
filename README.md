@@ -1,4 +1,4 @@
-# csakura 2.0 🌸
+# csakura 2.1 🌸
 
 [![clones](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Frealstrawhat%2Fcsakura%2Ftraffic-data%2Ftraffic.json&query=%24.clones.total&label=clones&color=f76fae&style=flat-square)](#clone-tracking)
 [![stars](https://img.shields.io/github/stars/realstrawhat/csakura?label=stars&color=f76fae&style=flat-square)](https://github.com/realstrawhat/csakura/stargazers)
@@ -17,6 +17,18 @@ A sakura tree with falling petals for your terminal — in the spirit of
 - [Live keyboard shortcuts](#shortcuts) for every setting — palette, petals,
   wind, speed, ASCII and flat mode, all without restarting
 - Matching HTML demo in [`web/`](web/)
+
+## What's new in 2.1
+
+The canopy is painted on a dark shadow tone so eight colours can read as one
+solid mass. That tone shipped as a fixed neutral grey, which shows up as grey
+squares on a terminal whose background is any other shade.
+
+- **`-H COLOR`.** Set the shadow to any xterm colour (0-255) so it matches your
+  own background instead of fighting it.
+- **`-H none`.** Leave the shadow unpainted while the blossom keeps its
+  shading, for a crown that still has depth over a transparent terminal.
+- `-t` is unchanged and still turns every cell background off.
 
 ## What's new in 2.0
 
