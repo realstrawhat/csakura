@@ -15,7 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION "2.0.0"
+#define VERSION "2.1.0"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
