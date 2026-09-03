@@ -992,7 +992,7 @@ int main(int argc, char **argv)
         case 'H':
             if (!parse_haze(optarg, &opt_haze)) {
                 fprintf(stderr,
-                        "csakura: bad haze colour '%s', want 0-255 or none\n",
+                        "csakura: bad shadow colour '%s', want 0-255 or none\n",
                         optarg);
                 return 1;
             }
